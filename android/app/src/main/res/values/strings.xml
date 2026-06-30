@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Foreground service notification strings. Kept here so they can be
+         localised without touching Kotlin code. -->
+    <string name="foreground_notification_title">App Lock Active</string>
+    <string name="foreground_notification_text">Monitoring installments in the background.</string>
+    <string name="foreground_channel_description">Keeps the App Lock service running so it can enforce the lock when due.</string>
+</resources>

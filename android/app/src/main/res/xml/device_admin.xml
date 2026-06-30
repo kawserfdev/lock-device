@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Device Admin policies for the App Lock demo.
+
+    Only `force-lock` is declared. `wipe-data` is intentionally omitted so the
+    demo can never accidentally factory-reset a device (architecture review §5.2
+    demo-safety policy).
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

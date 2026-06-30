@@ -1,0 +1,68 @@
+package com.example.app_lock.channels
+
+import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import com.example.app_lock.channels.handlers.AppLockHandler
+import com.example.app_lock.channels.handlers.PermissionHandler
+import com.example.app_lock.channels.handlers.UninstallHandler
+import com.example.app_lock.util.Constants
+
+/**
+ * Wraps the Flutter [MethodChannel] used for request/response commands.
+ *
+ * This is the *only* place on the native side that owns the [MethodChannel]
+ * reference and the dispatch table. Each incoming method name is routed to the
+ * appropriate handler ([PermissionHandler] or [AppLockHandler]); the handler's
+ * return value is marshalled back to Flutter as the `result`.
+ *
+ * Threading: Flutter invokes `onMethodCall` on the platform thread, so handlers
+ * must not block. Long work belongs in the foreground service.
+ *
+ * Error model (§4.1): unexpected failures are surfaced as structured
+ * `PlatformException{code, message, details}` via `result.error(...)`. Missing
+ * methods surface as `notImplemented`.
+ */
+class LockMethodChannel(
+    private val permissionHandler: PermissionHandler,
+    private val appLockHandler: AppLockHandler,
+    private val uninstallHandler: UninstallHandler,
+) : MethodChannel.MethodCallHandler {
+
+    /**
+     * Registers this handler on a freshly created [MethodChannel] bound to the
+     * given binary messenger.
+     */
+    fun register(messenger: BinaryMessenger) {
+        MethodChannel(messenger, Constants.METHOD_CHANNEL_NAME).setMethodCallHandler(this)
+    }
+
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val value: Any? = when (call.method) {
+                Constants.METHOD_CHECK_PERMISSION -> permissionHandler.checkPermission()
+                Constants.METHOD_REQUEST_PERMISSION -> permissionHandler.requestPermission()
+                Constants.METHOD_IS_PROVISIONING_ALLOWED -> permissionHandler.isProvisioningAllowed()
+                Constants.METHOD_LOCK_NOW -> appLockHandler.lockNow()
+                Constants.METHOD_START_SERVICE -> appLockHandler.startService()
+                Constants.METHOD_STOP_SERVICE -> appLockHandler.stopService()
+                Constants.METHOD_IS_SERVICE_RUNNING -> appLockHandler.isServiceRunning()
+                Constants.METHOD_SET_UNINSTALL_BLOCKED -> {
+                    val blocked = call.argument<Boolean>(Constants.KEY_BLOCKED) ?: false
+                    uninstallHandler.setUninstallBlocked(blocked)
+                }
+                Constants.METHOD_IS_UNINSTALL_BLOCKED -> uninstallHandler.isUninstallBlocked()
+                Constants.METHOD_IS_UNINSTALL_BLOCK_SUPPORTED -> uninstallHandler.isUninstallBlockSupported()
+                else -> {
+                    result.notImplemented()
+                    return
+                }
+            }
+            result.success(value)
+        } catch (t: Throwable) {
+            // Structured error so the Dart side receives a PlatformException
+            // rather than a silent drop.
+            result.error("native_error", t.message ?: "Unknown native error", null)
+        }
+    }
+}

@@ -1,0 +1,60 @@
+name: app_lock
+description: "Demo Installment Locker Application — demonstrates the Android app-locking workflow."
+publish_to: 'none' # Private package — not intended for pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── State management · Dependency Injection · Routing ──────────────────────
+  # GetX is the single infrastructure framework used for state (Rx/Obx),
+  # DI (Get.put/Get.lazyPut) and navigation (GetPage). Keeping one framework
+  # avoids overlapping responsibilities and reduces the dependency surface.
+  get: ^4.6.6
+
+  # ── Local persistence ──────────────────────────────────────────────────────
+  # Lightweight key/value store used for demo flags (e.g. "hasSeenWelcome",
+  # "isDeviceAdminActive"). No database — static data only per project scope.
+  get_storage: ^2.1.1
+
+  # ── Logging ────────────────────────────────────────────────────────────────
+  # Pretty, leveled console logging with stack-trace support. Wrapped behind
+  # AppLogger so the rest of the app never imports this package directly.
+  logger: ^2.4.0
+
+  # ── Responsive layout ──────────────────────────────────────────────────────
+  # Design-time sizing (sp/dp) that scales across screen densities.
+  flutter_screenutil: ^5.9.3
+
+  # ── Assets ─────────────────────────────────────────────────────────────────
+  # SVG rendering for the app logo and vector icons.
+  flutter_svg: ^2.0.10+1
+
+  # ── Device / package metadata ──────────────────────────────────────────────
+  # Read-only device and app info used for diagnostics on the Status screen.
+  device_info_plus: ^10.1.2
+  package_info_plus: ^8.0.0
+
+  # ── Utilities ───────────────────────────────────────────────────────────────
+  # List/map equality helpers and functional utilities.
+  collection: ^1.18.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - assets/images/
