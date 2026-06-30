@@ -52,7 +52,8 @@ class DeviceAdminController(
     }
 
     /**
-     * Attempts to lock the device immediately.
+     * Attempts to lock the device immediately, opening a post-lock lockout
+     * window of the default duration ([Constants.LOCKOUT_DURATION_MS]).
      *
      * Flow:
      * - If neither admin nor owner is active → emit `permission_missing`,
@@ -68,8 +69,34 @@ class DeviceAdminController(
      *
      * @return `true` only when the lock was actually executed.
      */
-    fun lockNow(): Boolean {
-        Log.d(TAG, "lockNow() invoked")
+    fun lockNow(): Boolean = performLock(Constants.LOCKOUT_DURATION_MS)
+
+    /**
+     * Attempts to lock the device immediately, opening a post-lock lockout
+     * window of the given [durationMs].
+     *
+     * During that window any unlock attempt is countered by an immediate
+     * re-lock (see [LockoutManager]). Use this for the user-driven "timed
+     * forced-lock" feature where the user picks how long the device must stay
+     * locked.
+     *
+     * @param durationMs How long (ms) the device must stay locked. Values
+     * `<= 0` fall back to [Constants.LOCKOUT_DURATION_MS].
+     * @return `true` only when the lock was actually executed.
+     */
+    fun lockForDuration(durationMs: Long): Boolean {
+        val safe = if (durationMs > 0L) durationMs else Constants.LOCKOUT_DURATION_MS
+        return performLock(safe)
+    }
+
+    /**
+     * Shared lock pipeline used by both [lockNow] and [lockForDuration].
+     *
+     * Validates permission + keyguard state, executes the lock, emits the
+     * typed result, and opens the lockout window for [lockoutDurationMs].
+     */
+    private fun performLock(lockoutDurationMs: Long): Boolean {
+        Log.d(TAG, "performLock() invoked, lockoutDuration=${lockoutDurationMs}ms")
 
         // 1. Validate permission (defense-in-depth — also checked in Flutter).
         //    Accept either an active admin (ACTION_ADD_DEVICE_ADMIN path) or a
@@ -98,9 +125,9 @@ class DeviceAdminController(
             Log.i(TAG, "lockNow() -> device locked")
             emitLockResult(Constants.LOCK_RESULT_SUCCESS)
             // 4. Open the post-lock lockout window so unlock attempts are
-            //    re-locked for LOCKOUT_DURATION_MS. Safe to call from any
+            //    re-locked for lockoutDurationMs. Safe to call from any
             //    construction path — LockoutManager owns its own lock engine.
-            LockoutManager.startLockout()
+            LockoutManager.startLockout(lockoutDurationMs)
             true
         } catch (t: Throwable) {
             Log.e(TAG, "lockNow() failed", t)

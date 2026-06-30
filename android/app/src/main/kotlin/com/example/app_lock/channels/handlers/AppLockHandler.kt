@@ -42,6 +42,21 @@ class AppLockHandler(
     }
 
     /**
+     * Sends the lock command with a custom lockout duration.
+     *
+     * Delegates to [DeviceAdminController.lockForDuration], which performs the
+     * same validation as [lockNow] and opens a lockout window of [durationMs]
+     * during which unlock attempts are immediately re-locked.
+     *
+     * @param durationMs How long (ms) the device must stay locked.
+     * @return `true` only when the lock was actually executed.
+     */
+    fun lockForDuration(durationMs: Long): Boolean {
+        Log.d(TAG, "lockForDuration($durationMs ms) -> delegating to DeviceAdminController")
+        return lockEngine.lockForDuration(durationMs)
+    }
+
+    /**
      * Starts the foreground service.
      *
      * Builds the launch [Intent] and hands it to [Context.startForegroundService].

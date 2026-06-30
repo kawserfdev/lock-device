@@ -17,9 +17,10 @@ import com.example.app_lock.util.Constants
  * Enforces a time-bounded "lockout window" after a successful device lock.
  *
  * Requirement: once the device is locked (by the manual lock command or by the
- * background countdown timer), the user must not be able to unlock for
- * [Constants.LOCKOUT_DURATION_MS] (1 minute). Any unlock attempt during that
- * window is countered by an immediate re-lock.
+ * background countdown timer), the user must not be able to unlock for a
+ * configurable duration (default [Constants.LOCKOUT_DURATION_MS] = 1 minute,
+ * overridable via [startLockout]'s `durationMs` parameter). Any unlock attempt
+ * during that window is countered by an immediate re-lock.
  *
  * Mechanism:
  * - [startLockout] records the start time, registers a [BroadcastReceiver]
@@ -36,8 +37,9 @@ import com.example.app_lock.util.Constants
  *   MainActivity-created lock engine and the service-created lock engine call
  *   [startLockout] on a successful lock.
  * - **Idempotent start** — calling [startLockout] while a window is already
- *   active is a no-op; the timer is NOT reset. This ensures a fixed 1-minute
- *   window from the *initial* lock, not from the most recent re-lock.
+ *   active is a no-op; the timer is NOT reset. This ensures a fixed window
+ *   (whose length is set by the initial call) from the *initial* lock, not
+ *   from the most recent re-lock.
  * - **Static holder emission** — events are pushed through
  *   [LockEventChannel.instance]; when Flutter is absent the emission is a
  *   no-op but the re-lock still executes (invariant §9.2).
@@ -61,6 +63,14 @@ object LockoutManager {
     /** Elapsed-realtime marker of the lockout start, or `0L` when inactive. */
     @Volatile
     private var lockoutStartUptimeMs: Long = 0L
+
+    /**
+     * Duration (ms) of the current lockout window. Defaults to
+     * [Constants.LOCKOUT_DURATION_MS] and is overridden per-call by
+     * [startLockout] when a custom duration is supplied.
+     */
+    @Volatile
+    private var lockoutDurationMs: Long = Constants.LOCKOUT_DURATION_MS
 
     /** Whether the USER_PRESENT receiver is currently registered. */
     @Volatile
@@ -101,15 +111,19 @@ object LockoutManager {
     fun isLockoutActive(): Boolean {
         if (lockoutStartUptimeMs == 0L) return false
         val elapsed = SystemClock.elapsedRealtime() - lockoutStartUptimeMs
-        return elapsed < Constants.LOCKOUT_DURATION_MS
+        return elapsed < lockoutDurationMs
     }
 
     /**
      * Opens the lockout window. Idempotent — if a window is already open this
      * is a no-op (the timer is NOT reset), so the window is measured from the
      * *initial* lock, not from subsequent re-locks.
+     *
+     * @param durationMs How long (ms) the device must stay locked. Any unlock
+     * attempt within this window triggers an immediate re-lock. Defaults to
+     * [Constants.LOCKOUT_DURATION_MS] (1 minute) for the standard lock path.
      */
-    fun startLockout() {
+    fun startLockout(durationMs: Long = Constants.LOCKOUT_DURATION_MS) {
         if (isLockoutActive()) {
             Log.d(TAG, "startLockout() — window already active, ignoring")
             return
@@ -119,7 +133,8 @@ object LockoutManager {
             return
         }
 
-        Log.i(TAG, "Lockout window opened (${Constants.LOCKOUT_DURATION_MS} ms)")
+        lockoutDurationMs = if (durationMs > 0L) durationMs else Constants.LOCKOUT_DURATION_MS
+        Log.i(TAG, "Lockout window opened (${lockoutDurationMs} ms)")
         lockoutStartUptimeMs = SystemClock.elapsedRealtime()
 
         if (!receiverRegistered) {
@@ -133,7 +148,7 @@ object LockoutManager {
             receiverRegistered = true
         }
 
-        handler.postDelayed(lockoutEndRunnable, Constants.LOCKOUT_DURATION_MS)
+        handler.postDelayed(lockoutEndRunnable, lockoutDurationMs)
         emitLockoutState(active = true)
     }
 

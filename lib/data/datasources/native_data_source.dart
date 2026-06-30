@@ -59,6 +59,20 @@ class NativeDataSource {
     );
   }
 
+  /// Sends the lock command with a custom lockout duration.
+  ///
+  /// The device locks immediately and any unlock attempt within [durationMs]
+  /// is countered by an immediate re-lock. After [durationMs] elapses the
+  /// user may unlock normally.
+  Future<bool> lockForDuration(int durationMs) {
+    return _methodChannel.invokeBoolMethod(
+      ChannelConstants.methodLockForDuration,
+      args: <String, dynamic>{
+        ChannelConstants.keyDurationMs: durationMs,
+      },
+    );
+  }
+
   // ── Service ───────────────────────────────────────────────────────────────
 
   /// Asks native to start the foreground service.

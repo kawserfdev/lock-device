@@ -41,6 +41,27 @@ class LockRepositoryImpl implements LockRepository {
   }
 
   @override
+  Future<LockResult> lockForDuration(int durationMs) async {
+    try {
+      final bool success = await _native.lockForDuration(durationMs);
+      if (success) {
+        final String timestamp = DateTime.now().toUtc().toIso8601String();
+        await _local.setLastLockTime(timestamp);
+        AppLogger.info(
+          'Timed lock command succeeded at $timestamp '
+          '(duration=${durationMs}ms)',
+        );
+        return LockResult.success;
+      }
+      AppLogger.warning('Timed lock command returned false');
+      return LockResult.failed;
+    } on AppError catch (e) {
+      AppLogger.error('lockForDuration failed', error: e);
+      return LockResult.failed;
+    }
+  }
+
+  @override
   Stream<LockResult> get lockResults => _native.lockResults;
 
   @override

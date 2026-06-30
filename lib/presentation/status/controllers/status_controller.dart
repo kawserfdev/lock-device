@@ -8,6 +8,7 @@ import '../../../domain/entities/app_state.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
+import '../../../domain/usecases/lock_for_duration_usecase.dart';
 import '../../../domain/usecases/lock_now_usecase.dart';
 import '../../../domain/usecases/set_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/start_service_usecase.dart';
@@ -39,6 +40,7 @@ class StatusController extends GetxController {
     required StartServiceUseCase startServiceUseCase,
     required StopServiceUseCase stopServiceUseCase,
     required LockNowUseCase lockNowUseCase,
+    required LockForDurationUseCase lockForDurationUseCase,
     required WatchServiceStateUseCase watchServiceStateUseCase,
     required WatchLockResultUseCase watchLockResultUseCase,
     required WatchLockoutStateUseCase watchLockoutStateUseCase,
@@ -50,6 +52,7 @@ class StatusController extends GetxController {
         _startServiceUseCase = startServiceUseCase,
         _stopServiceUseCase = stopServiceUseCase,
         _lockNowUseCase = lockNowUseCase,
+        _lockForDurationUseCase = lockForDurationUseCase,
         _watchServiceStateUseCase = watchServiceStateUseCase,
         _watchLockResultUseCase = watchLockResultUseCase,
         _watchLockoutStateUseCase = watchLockoutStateUseCase,
@@ -62,6 +65,7 @@ class StatusController extends GetxController {
   final StartServiceUseCase _startServiceUseCase;
   final StopServiceUseCase _stopServiceUseCase;
   final LockNowUseCase _lockNowUseCase;
+  final LockForDurationUseCase _lockForDurationUseCase;
   final WatchServiceStateUseCase _watchServiceStateUseCase;
   final WatchLockResultUseCase _watchLockResultUseCase;
   final WatchLockoutStateUseCase _watchLockoutStateUseCase;
@@ -80,6 +84,12 @@ class StatusController extends GetxController {
 
   /// Whether an action is currently in flight.
   final RxBool isBusy = false.obs;
+
+  /// User-selected lock duration in minutes for the timed-lock feature.
+  final RxInt selectedLockMinutes = 5.obs;
+
+  /// Preset durations (in minutes) offered in the duration picker.
+  List<int> get lockDurationPresets => const <int>[1, 5, 10, 15, 30, 60];
 
   /// Static demo flag — in a real app this would come from a backend.
   /// For the demo it is always `true`, meaning the device is "overdue"
@@ -255,6 +265,35 @@ class StatusController extends GetxController {
     isBusy.value = true;
     try {
       final LockResult result = await _lockNowUseCase.call();
+      _update(
+        lockResult: result,
+        lastLockTime: result == LockResult.success
+            ? DateTime.now().toUtc().toIso8601String()
+            : state.value.lastLockTime,
+      );
+    } finally {
+      isBusy.value = false;
+    }
+  }
+
+  /// Updates the user-selected lock duration (minutes).
+  void selectLockMinutes(int minutes) {
+    selectedLockMinutes.value = minutes;
+    AppLogger.debug('Timed-lock duration set to $minutes min');
+  }
+
+  /// Locks the device for the user-selected duration.
+  ///
+  /// During that window any unlock attempt is immediately re-locked by the
+  /// native LockoutManager. The lockout-state push stream will flip
+  /// [AppState.isLockoutActive] to `true` and back to `false` when the
+  /// window elapses.
+  Future<void> lockForDuration() async {
+    if (isBusy.value) return;
+    isBusy.value = true;
+    try {
+      final int durationMs = selectedLockMinutes.value * 60 * 1000;
+      final LockResult result = await _lockForDurationUseCase.call(durationMs);
       _update(
         lockResult: result,
         lastLockTime: result == LockResult.success

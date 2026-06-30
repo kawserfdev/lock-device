@@ -44,6 +44,11 @@ class LockMethodChannel(
                 Constants.METHOD_REQUEST_PERMISSION -> permissionHandler.requestPermission()
                 Constants.METHOD_IS_PROVISIONING_ALLOWED -> permissionHandler.isProvisioningAllowed()
                 Constants.METHOD_LOCK_NOW -> appLockHandler.lockNow()
+                Constants.METHOD_LOCK_FOR_DURATION -> {
+                    val raw = call.argument<Number>(Constants.KEY_DURATION_MS)
+                    val durationMs = raw?.toLong() ?: Constants.LOCKOUT_DURATION_MS
+                    appLockHandler.lockForDuration(durationMs)
+                }
                 Constants.METHOD_START_SERVICE -> appLockHandler.startService()
                 Constants.METHOD_STOP_SERVICE -> appLockHandler.stopService()
                 Constants.METHOD_IS_SERVICE_RUNNING -> appLockHandler.isServiceRunning()

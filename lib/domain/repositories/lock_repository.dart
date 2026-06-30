@@ -10,6 +10,14 @@ abstract class LockRepository {
   /// Returns the typed [LockResult] describing the outcome.
   Future<LockResult> lockNow();
 
+  /// Sends the lock command with a custom lockout duration.
+  ///
+  /// The device locks immediately and any unlock attempt within [durationMs]
+  /// is countered by an immediate re-lock until the duration elapses.
+  ///
+  /// Returns the typed [LockResult] describing the outcome.
+  Future<LockResult> lockForDuration(int durationMs);
+
   /// Stream of lock-result events pushed from native.
   Stream<LockResult> get lockResults;
 

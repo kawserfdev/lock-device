@@ -28,6 +28,9 @@ class ChannelConstants {
   /// Send the lock command to the native lock engine.
   static const String methodLockNow = 'lockNow';
 
+  /// Send the lock command with a custom lockout duration (ms).
+  static const String methodLockForDuration = 'lockForDuration';
+
   /// Start the foreground background service.
   static const String methodStartService = 'startService';
 
@@ -85,4 +88,7 @@ class ChannelConstants {
   /// Key for the boolean blocked flag on an `uninstallBlockChanged` event and
   /// the argument to the `setUninstallBlocked` method.
   static const String keyBlocked = 'blocked';
+
+  /// Key for the lockout duration (ms) argument to `lockForDuration`.
+  static const String keyDurationMs = 'durationMs';
 }

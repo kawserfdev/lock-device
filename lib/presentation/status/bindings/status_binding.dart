@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
+import '../../../domain/usecases/lock_for_duration_usecase.dart';
 import '../../../domain/usecases/lock_now_usecase.dart';
 import '../../../domain/usecases/set_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/start_service_usecase.dart';
@@ -35,6 +36,9 @@ class StatusBinding extends Bindings {
     Get.lazyPut<LockNowUseCase>(
       () => LockNowUseCase(Get.find()),
     );
+    Get.lazyPut<LockForDurationUseCase>(
+      () => LockForDurationUseCase(Get.find()),
+    );
     Get.lazyPut<SetUninstallBlockedUseCase>(
       () => SetUninstallBlockedUseCase(Get.find()),
     );
@@ -62,6 +66,7 @@ class StatusBinding extends Bindings {
         startServiceUseCase: Get.find(),
         stopServiceUseCase: Get.find(),
         lockNowUseCase: Get.find(),
+        lockForDurationUseCase: Get.find(),
         watchServiceStateUseCase: Get.find(),
         watchLockResultUseCase: Get.find(),
         watchLockoutStateUseCase: Get.find(),

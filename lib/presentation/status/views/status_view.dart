@@ -31,6 +31,8 @@ class StatusView extends GetView<StatusController> {
               SizedBox(height: 8),
               _LockoutTile(),
               SizedBox(height: 8),
+              _TimedLockTile(),
+              SizedBox(height: 8),
               _DemoTile(),
               SizedBox(height: 8),
               _UninstallBlockTile(),
@@ -124,9 +126,76 @@ class _LockoutTile extends StatelessWidget {
           icon: Icons.lock_clock,
           title: 'Lockout Window',
           value: controller.state.value.isLockoutActive
-              ? 'Active (1 min)'
+              ? 'Active'
               : 'Inactive',
         ));
+  }
+}
+
+class _TimedLockTile extends StatelessWidget {
+  const _TimedLockTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final StatusController controller = Get.find();
+    return Obx(() {
+      final int minutes = controller.selectedLockMinutes.value;
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.timer, color: theme.colorScheme.primary),
+                title: const Text('Timed Lock'),
+                subtitle: Text(
+                  'Lock for $minutes minute${minutes == 1 ? '' : 's'}',
+                ),
+                trailing: TextButton.icon(
+                  onPressed: () => _showDurationPicker(context, controller),
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Change'),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: controller.isBusy.value
+                    ? null
+                    : () => controller.lockForDuration(),
+                icon: const Icon(Icons.lock_clock),
+                label: Text('Lock for $minutes min'),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  /// Shows a dialog of preset durations and applies the selection.
+  Future<void> _showDurationPicker(
+    BuildContext context,
+    StatusController controller,
+  ) async {
+    final int? selected = await showDialog<int>(
+      context: context,
+      builder: (BuildContext ctx) => SimpleDialog(
+        title: const Text('Lock duration'),
+        children: controller.lockDurationPresets
+            .map(
+              (int minutes) => SimpleDialogOption(
+                onPressed: () => Navigator.of(ctx).pop(minutes),
+                child: Text('$minutes minute${minutes == 1 ? '' : 's'}'),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (selected != null) {
+      controller.selectLockMinutes(selected);
+    }
   }
 }
 

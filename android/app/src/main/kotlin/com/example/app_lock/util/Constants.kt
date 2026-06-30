@@ -34,6 +34,9 @@ object Constants {
     /** Send the lock command to the native lock engine. */
     const val METHOD_LOCK_NOW = "lockNow"
 
+    /** Send the lock command with a custom lockout duration (ms). */
+    const val METHOD_LOCK_FOR_DURATION = "lockForDuration"
+
     /** Start the foreground background service. */
     const val METHOD_START_SERVICE = "startService"
 
@@ -89,6 +92,9 @@ object Constants {
     /** Key for the boolean blocked flag on an `uninstallBlockChanged` event and
      *  the argument to the `setUninstallBlocked` method. */
     const val KEY_BLOCKED = "blocked"
+
+    /** Key for the lockout duration (ms) argument to `lockForDuration`. */
+    const val KEY_DURATION_MS = "durationMs"
 
     // ── Lock result enum strings (mirrors Dart `LockResult`) ─────────────────
 
