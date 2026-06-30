@@ -43,6 +43,16 @@ class UninstallBlockController(
         private const val TAG = "UninstallBlockCtrl"
 
         /**
+         * User restriction that blocks "Reset app preferences" in Settings.
+         *
+         * This is the `@hide` `UserManager.DISALLOW_CONFIG_APPS` constant —
+         * not exposed in the public SDK, so the raw string value is used
+         * directly. The value is stable and documented in the Android
+         * source (`frameworks/base`).
+         */
+        private const val DISALLOW_CONFIG_APPS = "no_config_apps"
+
+        /**
          * Process-wide record of the *intended* uninstall-block state.
          *
          * Set whenever [setBlocked] runs. Read by
@@ -134,12 +144,32 @@ class UninstallBlockController(
 
         return try {
             if (blocked) {
-                // addUserRestriction is available since API 8.
+                // Apply the full protection bundle. All three restrictions
+                // are Device-Owner user restrictions available since API 8.
+                //
+                // - DISALLOW_UNINSTALL_APPS: the user cannot uninstall this
+                //   (or any) app in any way.
+                // - DISALLOW_FACTORY_RESET: blocks "Erase all data (factory
+                //   reset)" in Settings → System → Reset options.
+                // - "no_config_apps" (DISALLOW_CONFIG_APPS): blocks "Reset
+                //   app preferences" in Settings → Apps → menu, which would
+                //   otherwise clear defaults/disabled-app state and weaken
+                //   the protection. This constant is a @hide API, so the
+                //   raw string value is used directly — it is stable and
+                //   documented in the Android source.
                 devicePolicyManager.addUserRestriction(
                     adminComponent,
                     UserManager.DISALLOW_UNINSTALL_APPS,
                 )
-                Log.i(TAG, "Uninstall block APPLIED")
+                devicePolicyManager.addUserRestriction(
+                    adminComponent,
+                    UserManager.DISALLOW_FACTORY_RESET,
+                )
+                devicePolicyManager.addUserRestriction(
+                    adminComponent,
+                    DISALLOW_CONFIG_APPS,
+                )
+                Log.i(TAG, "Protection bundle APPLIED (uninstall/factory-reset/app-prefs)")
                 emitUninstallBlockChanged(true)
                 true
             } else {

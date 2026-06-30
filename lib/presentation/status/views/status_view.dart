@@ -170,7 +170,8 @@ class _UninstallBlockTile extends StatelessWidget {
             !supported
                 ? 'Unavailable (needs Device Owner)'
                 : blocked
-                    ? 'Blocked — app cannot be uninstalled'
+                    ? 'Blocked — uninstall, factory reset & '
+                        'reset app preferences disabled'
                     : 'Enabled — app can be uninstalled',
           ),
           trailing: Switch(
