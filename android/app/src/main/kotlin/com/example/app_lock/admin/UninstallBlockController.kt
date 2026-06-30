@@ -3,10 +3,12 @@ package com.example.app_lock.admin
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
-import android.os.Build
+import android.content.Intent
+import android.net.Uri
 import android.os.UserManager
 import android.util.Log
 import com.example.app_lock.channels.LockEventChannel
+import com.example.app_lock.permissions.ActivityLauncher
 
 /**
  * Controls the uninstall-block restriction for the App Lock demo.
@@ -34,6 +36,7 @@ import com.example.app_lock.channels.LockEventChannel
 class UninstallBlockController(
     private val context: Context,
     private val eventChannel: LockEventChannel? = null,
+    private val activityLauncher: ActivityLauncher? = null,
 ) {
 
     companion object {
@@ -102,8 +105,10 @@ class UninstallBlockController(
      *   [UserManager.DISALLOW_UNINSTALL_APPS]. The user can then no longer
      *   uninstall the app in any way (Settings, package installer, ADB shell
      *   `pm uninstall` against the user).
-     * - When [blocked] is `false`, removes the restriction so the user may
-     *   uninstall normally.
+     * - When [blocked] is `false`, clears the Device Owner role (one-way)
+     *   so the app becomes uninstallable, then launches the system uninstall
+     *   dialog. After this the screen-lock feature is disabled until adb
+     *   re-provisioning.
      *
      * The intended state is always recorded in [blockIntended] so the secondary
      * warning layer works regardless of owner status.
@@ -130,23 +135,35 @@ class UninstallBlockController(
         return try {
             if (blocked) {
                 // addUserRestriction is available since API 8.
-                devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
+                devicePolicyManager.addUserRestriction(
+                    adminComponent,
+                    UserManager.DISALLOW_UNINSTALL_APPS,
+                )
                 Log.i(TAG, "Uninstall block APPLIED")
+                emitUninstallBlockChanged(true)
+                true
             } else {
-                // clearUserRestriction was added in API 24 (N). On older
-                // devices the restriction cannot be removed via this API, so we
-                // report the unchanged state honestly instead of crashing.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    devicePolicyManager.clearUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
-                    Log.i(TAG, "Uninstall block REMOVED")
-                } else {
-                    Log.w(TAG, "clearUserRestriction unavailable on API ${Build.VERSION.SDK_INT} (< N); block remains")
-                    emitUninstallBlockChanged(true)
-                    return false
-                }
+                // Turning the block OFF is a destructive, one-way
+                // operation: clear the Device Owner role (which also removes
+                // all policies the owner set, including
+                // DISALLOW_UNINSTALL_APPS) so the app becomes uninstallable,
+                // then launch the system uninstall dialog for the user to
+                // confirm.
+                //
+                // After this the app is no longer the Device Owner — the
+                // screen-lock feature is disabled until adb re-provisioning.
+                devicePolicyManager.clearDeviceOwnerApp(context.packageName)
+                Log.i(TAG, "Device Owner CLEARED — app is now uninstallable")
+
+                // Notify Flutter that both the permission and the block are
+                // gone so the UI reconciles immediately.
+                emitPermissionChanged(false)
+                emitUninstallBlockChanged(false)
+
+                // Launch the system "Uninstall this app?" dialog.
+                launchUninstallDialog()
+                true
             }
-            emitUninstallBlockChanged(blocked)
-            true
         } catch (t: Throwable) {
             Log.e(TAG, "setBlocked($blocked) failed", t)
             // Emit the actual (unchanged) state so Flutter does not desync.
@@ -166,5 +183,42 @@ class UninstallBlockController(
     private fun emitUninstallBlockChanged(blocked: Boolean) {
         val channel = eventChannel ?: LockEventChannel.instance
         channel?.emitUninstallBlockChanged(blocked)
+    }
+
+    /**
+     * Emits a `permissionChanged` event through whichever channel is
+     * available.
+     *
+     * Called after [setBlocked] clears the Device Owner role so Flutter's
+     * permission status reconciles immediately.
+     */
+    private fun emitPermissionChanged(granted: Boolean) {
+        val channel = eventChannel ?: LockEventChannel.instance
+        channel?.emitPermissionChanged(granted)
+    }
+
+    /**
+     * Launches the system "Uninstall this app?" dialog.
+     *
+     * Uses [Intent.ACTION_DELETE] with a `package:` URI so the platform
+     * package installer shows the standard uninstall confirmation. If no
+     * [ActivityLauncher] was injected, the call is a no-op and the user
+     * must uninstall manually from Settings.
+     */
+    private fun launchUninstallDialog() {
+        val launcher = activityLauncher
+        if (launcher == null) {
+            Log.w(TAG, "No ActivityLauncher — user must uninstall from Settings")
+            return
+        }
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+        val launched = launcher.launch(intent)
+        if (launched) {
+            Log.i(TAG, "System uninstall dialog launched")
+        } else {
+            Log.w(TAG, "System uninstall dialog could not be launched")
+        }
     }
 }

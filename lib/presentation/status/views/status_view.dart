@@ -179,11 +179,51 @@ class _UninstallBlockTile extends StatelessWidget {
             // Owner (the restriction cannot be set).
             onChanged: (controller.isBusy.value || !supported)
                 ? null
-                : (_) => controller.toggleUninstallBlock(),
+                : (bool value) async {
+                    if (!value) {
+                      // Turning OFF is destructive — confirm first.
+                      final bool? confirmed =
+                          await _showClearOwnerDialog(context);
+                      if (confirmed != true) return;
+                    }
+                    await controller.toggleUninstallBlock();
+                  },
           ),
         ),
       );
     });
+  }
+
+  /// Shows a confirmation dialog before the destructive toggle-OFF.
+  ///
+  /// Turning the block off clears the Device Owner role (one-way) and
+  /// launches the system uninstall dialog. The user must acknowledge the
+  /// consequences before proceeding.
+  Future<bool?> _showClearOwnerDialog(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Remove Uninstall Block?'),
+        content: const Text(
+          'This will clear the Device Owner permission (one-way) '
+          'and launch the system uninstall dialog.\n\n'
+          '• The app will become uninstallable.\n'
+          '• The screen-lock feature will be disabled until you '
+          're-provision via adb.\n'
+          '• You cannot undo this from inside the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

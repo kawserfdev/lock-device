@@ -68,12 +68,9 @@ class MainActivity : FlutterActivity() {
         //    re-locking during the post-lock lockout window. Idempotent.
         LockoutManager.init(this)
 
-        // 4. Native collaborators.
-        val lockEngine = DeviceAdminController(context = this, eventChannel = eventChannel)
-        val uninstallController = UninstallBlockController(context = this, eventChannel = eventChannel)
-
-        // 5. Activity launcher — lets the permission handler start the system
-        //    admin screen without owning an Activity reference.
+        // 4. Activity launcher — lets the permission handler and the
+        //    uninstall controller start system activities without owning an
+        //    Activity reference.
         val activityLauncher = ActivityLauncher { intent ->
             return@ActivityLauncher try {
                 startActivity(intent)
@@ -82,6 +79,14 @@ class MainActivity : FlutterActivity() {
                 false
             }
         }
+
+        // 5. Native collaborators.
+        val lockEngine = DeviceAdminController(context = this, eventChannel = eventChannel)
+        val uninstallController = UninstallBlockController(
+            context = this,
+            eventChannel = eventChannel,
+            activityLauncher = activityLauncher,
+        )
 
         // 6. Channel handlers — thin adapters over the collaborators.
         val permissionHandler = PermissionHandler(
