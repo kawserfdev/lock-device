@@ -42,18 +42,31 @@ class AppLockHandler(
     }
 
     /**
-     * Sends the lock command with a custom lockout duration.
+     * Starts a timed forced lock by launching the foreground service with a
+     * [AppLockForegroundService.ACTION_START_TIMED_LOCK] intent.
      *
-     * Delegates to [DeviceAdminController.lockForDuration], which performs the
-     * same validation as [lockNow] and opens a lockout window of [durationMs]
-     * during which unlock attempts are immediately re-locked.
+     * The service locks the device immediately, arms the re-lock window for
+     * [durationMs] (so unlock attempts are immediately re-locked), and stops
+     * itself when the duration elapses — at which point the device can be
+     * unlocked normally.
      *
      * @param durationMs How long (ms) the device must stay locked.
-     * @return `true` only when the lock was actually executed.
+     * @return `true` when the start intent was dispatched (the actual lock
+     *   outcome arrives later via the `lockResult` event).
      */
     fun lockForDuration(durationMs: Long): Boolean {
-        Log.d(TAG, "lockForDuration($durationMs ms) -> delegating to DeviceAdminController")
-        return lockEngine.lockForDuration(durationMs)
+        Log.d(TAG, "lockForDuration($durationMs ms) -> starting timed-lock service")
+        return try {
+            val intent = Intent(context, AppLockForegroundService::class.java)
+            intent.action = AppLockForegroundService.ACTION_START_TIMED_LOCK
+            intent.putExtra(AppLockForegroundService.EXTRA_DURATION_MS, durationMs)
+            context.startForegroundService(intent)
+            eventChannel.emitServiceStateChanged(Constants.SERVICE_STATUS_TRANSITIONING)
+            true
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to start timed-lock service", t)
+            false
+        }
     }
 
     /**

@@ -48,18 +48,18 @@ class StatusController extends GetxController {
     required IsUninstallBlockedUseCase isUninstallBlockedUseCase,
     required IsUninstallBlockSupportedUseCase isUninstallBlockSupportedUseCase,
     required WatchUninstallBlockUseCase watchUninstallBlockUseCase,
-  })  : _checkPermissionUseCase = checkPermissionUseCase,
-        _startServiceUseCase = startServiceUseCase,
-        _stopServiceUseCase = stopServiceUseCase,
-        _lockNowUseCase = lockNowUseCase,
-        _lockForDurationUseCase = lockForDurationUseCase,
-        _watchServiceStateUseCase = watchServiceStateUseCase,
-        _watchLockResultUseCase = watchLockResultUseCase,
-        _watchLockoutStateUseCase = watchLockoutStateUseCase,
-        _setUninstallBlockedUseCase = setUninstallBlockedUseCase,
-        _isUninstallBlockedUseCase = isUninstallBlockedUseCase,
-        _isUninstallBlockSupportedUseCase = isUninstallBlockSupportedUseCase,
-        _watchUninstallBlockUseCase = watchUninstallBlockUseCase;
+  }) : _checkPermissionUseCase = checkPermissionUseCase,
+       _startServiceUseCase = startServiceUseCase,
+       _stopServiceUseCase = stopServiceUseCase,
+       _lockNowUseCase = lockNowUseCase,
+       _lockForDurationUseCase = lockForDurationUseCase,
+       _watchServiceStateUseCase = watchServiceStateUseCase,
+       _watchLockResultUseCase = watchLockResultUseCase,
+       _watchLockoutStateUseCase = watchLockoutStateUseCase,
+       _setUninstallBlockedUseCase = setUninstallBlockedUseCase,
+       _isUninstallBlockedUseCase = isUninstallBlockedUseCase,
+       _isUninstallBlockSupportedUseCase = isUninstallBlockSupportedUseCase,
+       _watchUninstallBlockUseCase = watchUninstallBlockUseCase;
 
   final CheckPermissionUseCase _checkPermissionUseCase;
   final StartServiceUseCase _startServiceUseCase;
@@ -89,7 +89,7 @@ class StatusController extends GetxController {
   final RxInt selectedLockMinutes = 5.obs;
 
   /// Preset durations (in minutes) offered in the duration picker.
-  List<int> get lockDurationPresets => const <int>[1, 5, 10, 15, 30, 60];
+  List<int> get lockDurationPresets => const <int>[1, 2, 3, 4, 5, 10, 15, 30, 60];
 
   /// Static demo flag — in a real app this would come from a backend.
   /// For the demo it is always `true`, meaning the device is "overdue"
@@ -195,10 +195,7 @@ class StatusController extends GetxController {
   Future<void> refreshUninstallBlock() async {
     final bool supported = await _isUninstallBlockSupportedUseCase.call();
     final bool blocked = await _isUninstallBlockedUseCase.call();
-    _update(
-      isUninstallBlockSupported: supported,
-      isUninstallBlocked: blocked,
-    );
+    _update(isUninstallBlockSupported: supported, isUninstallBlocked: blocked);
   }
 
   /// Toggles the uninstall-block restriction.
@@ -250,10 +247,7 @@ class StatusController extends GetxController {
     isBusy.value = true;
     try {
       await _stopServiceUseCase.call();
-      _update(
-        serviceStatus: ServiceStatus.stopped,
-        isDemoRunning: false,
-      );
+      _update(serviceStatus: ServiceStatus.stopped, isDemoRunning: false);
     } finally {
       isBusy.value = false;
     }
@@ -325,12 +319,26 @@ class StatusController extends GetxController {
       isUninstallBlockSupported: isUninstallBlockSupported,
       lastLockTime: lastLockTime,
     );
-    AppLogger.debug('Status state updated: ${state.value}');
+    AppLogger.debug('Status state isDemoRunning: ${state.value.isDemoRunning}');
+    AppLogger.debug(
+      'Status state isLockoutActive: ${state.value.isLockoutActive}',
+    );
+    AppLogger.debug(
+      'Status state isUninstallBlockSupported: ${state.value.isUninstallBlockSupported}',
+    );
+    AppLogger.debug(
+      'Status state isUninstallBlocked: ${state.value.isUninstallBlocked}',
+    );
+    AppLogger.debug('Status state lastLockTime: ${state.value.lastLockTime}');
+    AppLogger.debug('Status state lockResult: ${state.value.lockResult}');
+    AppLogger.debug(
+      'Status state permissionStatus: ${state.value.permissionStatus}',
+    );
+    AppLogger.debug('Status state serviceStatus: ${state.value.serviceStatus}');
   }
 
   /// Human-readable label for the lock-trigger delay.
-  String get lockDelayLabel =>
-      '${AppConstants.lockTriggerDelaySeconds}s';
+  String get lockDelayLabel => '${AppConstants.lockTriggerDelaySeconds}s';
 
   @override
   void onClose() {

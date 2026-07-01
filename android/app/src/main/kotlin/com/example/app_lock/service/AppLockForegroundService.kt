@@ -7,7 +7,9 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.app_lock.R
@@ -50,6 +52,16 @@ class AppLockForegroundService : Service() {
         const val ACTION_STOP = "com.example.app_lock.action.STOP_SERVICE"
 
         /**
+         * Intent action that starts a *timed* forced lock: the device is
+         * locked immediately, re-lock is armed for the supplied duration, and
+         * the service stops itself when the duration elapses.
+         */
+        const val ACTION_START_TIMED_LOCK = "com.example.app_lock.action.START_TIMED_LOCK"
+
+        /** Intent extra key carrying the lock duration (ms) for [ACTION_START_TIMED_LOCK]. */
+        const val EXTRA_DURATION_MS = "durationMs"
+
+        /**
          * In-process flag mirroring whether the service is running.
          *
          * Accurate for the lifetime of the current process. The service is the
@@ -75,6 +87,24 @@ class AppLockForegroundService : Service() {
     private var countdownTimer: LockCountdownTimer? = null
 
     /**
+     * Handler used to schedule the self-stop callback for a timed lock.
+     * Runs on the main looper so [stopForegroundService] executes on the UI thread.
+     */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Self-stop callback armed by [scheduleSelfStop]; cancelled on stop/destroy. */
+    private var selfStopRunnable: Runnable? = null
+
+    /**
+     * Ensures [LockoutManager] is initialised before any lock operation.
+     * Idempotent — safe even if MainActivity already initialised it.
+     */
+    override fun onCreate() {
+        super.onCreate()
+        LockoutManager.init(this)
+    }
+
+    /**
      * No binding is supported — this is a started service only.
      */
     override fun onBind(intent: Intent?): IBinder? = null
@@ -91,6 +121,12 @@ class AppLockForegroundService : Service() {
                 Log.d(TAG, "ACTION_STOP received")
                 stopForegroundService()
                 return START_NOT_STICKY
+            }
+            ACTION_START_TIMED_LOCK -> {
+                val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, Constants.LOCKOUT_DURATION_MS)
+                Log.d(TAG, "ACTION_START_TIMED_LOCK received (duration=${durationMs}ms)")
+                startForegroundService()
+                startTimedLock(durationMs)
             }
             else -> {
                 // ACTION_START or a null-intent START_STICKY restart (§6.3).
@@ -131,6 +167,64 @@ class AppLockForegroundService : Service() {
     }
 
     /**
+     * Starts a timed forced lock (user-driven "lock for N minutes" feature).
+     *
+     * Flow:
+     * 1. Cancel any existing countdown / self-stop timer.
+     * 2. Forcibly arm [LockoutManager] for exactly [durationMs] so unlock
+     *    attempts are re-locked for the full chosen duration ("even if he
+     *    unlocks, it will be locked again automatically"). This MUST happen
+     *    before the lock call so the *only* end-callback ever posted is the
+     *    user-chosen duration — no transient default-duration (60s) window is
+     *    ever armed.
+     * 3. Lock the device immediately via [DeviceAdminController.lockNow].
+     *    `performLock` internally calls `LockoutManager.startLockout(60000)`,
+     *    but because [LockoutManager.startLockout] is idempotent and the
+     *    window is already active from step 2, that call is a no-op — the
+     *    user-chosen window is preserved untouched. `performLock` may also
+     *    short-circuit to `already_locked` (when the device is already
+     *    locked), which is fine because the window was armed in step 2.
+     * 4. Schedule a self-stop after [durationMs]: clear the lockout (so the
+     *    device can be unlocked) and stop the service.
+     */
+    private fun startTimedLock(durationMs: Long) {
+        countdownTimer?.cancel()
+        countdownTimer = null
+        selfStopRunnable?.let { mainHandler.removeCallbacks(it) }
+        selfStopRunnable = null
+
+        // Arm the re-lock window for the exact chosen duration FIRST. This is
+        // the only place a window is armed, so only the user-chosen duration's
+        // end-callback is ever posted — no transient 60s window can fire early.
+        LockoutManager.forceStartLockout(durationMs)
+
+        // Lock the device immediately. performLock's internal startLockout(60s)
+        // is an idempotent no-op here because the window is already active.
+        // May short-circuit to already_locked if the screen is already off —
+        // that is fine; the window was armed above regardless.
+        lockEngine.lockNow()
+
+        // Schedule self-stop after the duration.
+        scheduleSelfStop(durationMs)
+
+        emitServiceState(Constants.SERVICE_STATUS_RUNNING)
+    }
+
+    /**
+     * Arms a one-shot callback that clears the lockout and stops the service
+     * after [durationMs]. When it fires the device may be unlocked normally.
+     */
+    private fun scheduleSelfStop(durationMs: Long) {
+        val runnable = Runnable {
+            Log.i(TAG, "Timed-lock duration elapsed — clearing lockout and stopping")
+            LockoutManager.clearLockout()
+            stopForegroundService()
+        }
+        selfStopRunnable = runnable
+        mainHandler.postDelayed(runnable, durationMs)
+    }
+
+    /**
      * Creates the notification channel (Android 8+) and calls `startForeground`
      * with a low-importance notification (no sound, per §6.2).
      */
@@ -168,6 +262,11 @@ class AppLockForegroundService : Service() {
     private fun stopForegroundService() {
         countdownTimer?.cancel()
         countdownTimer = null
+        selfStopRunnable?.let { mainHandler.removeCallbacks(it) }
+        selfStopRunnable = null
+        // Clear any active lockout so the device can be unlocked once the
+        // service stops (covers both timed-lock self-stop and manual stop).
+        LockoutManager.clearLockout()
         emitServiceState(Constants.SERVICE_STATUS_STOPPED)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -206,6 +305,8 @@ class AppLockForegroundService : Service() {
         Log.d(TAG, "onDestroy()")
         countdownTimer?.cancel()
         countdownTimer = null
+        selfStopRunnable?.let { mainHandler.removeCallbacks(it) }
+        selfStopRunnable = null
         isRunning = false
     }
 }
