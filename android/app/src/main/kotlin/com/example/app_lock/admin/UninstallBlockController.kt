@@ -39,6 +39,14 @@ class UninstallBlockController(
     private val activityLauncher: ActivityLauncher? = null,
 ) {
 
+    /**
+     * Forces the device location ON while the uninstall-block protection is
+     * active, so the device stays trackable. Owned here because the location
+     * enforcement lifecycle is bound to the uninstall-block lifecycle: it is
+     * applied when the block goes ON and released when the block goes OFF.
+     */
+    private val locationEnforcement = LocationEnforcementController(context)
+
     companion object {
         private const val TAG = "UninstallBlockCtrl"
 
@@ -170,6 +178,18 @@ class UninstallBlockController(
                     DISALLOW_CONFIG_APPS,
                 )
                 Log.i(TAG, "Protection bundle APPLIED (uninstall/factory-reset/app-prefs)")
+
+                // Force location ON so the device stays trackable while the
+                // protection is active. Android has no restriction that locks
+                // the location toggle ON, so we use three layers:
+                // 1. setSecureSetting now (immediate force-on),
+                // 2. a periodic worker to re-apply every ~15 min, and
+                // 3. a real-time PROVIDERS_CHANGED receiver that re-enables
+                //    location the instant the user toggles it off.
+                locationEnforcement.apply()
+                locationEnforcement.scheduleReapply()
+                locationEnforcement.startRealtimeWatch()
+
                 emitUninstallBlockChanged(true)
                 true
             } else {
@@ -182,6 +202,16 @@ class UninstallBlockController(
                 //
                 // After this the app is no longer the Device Owner — the
                 // screen-lock feature is disabled until adb re-provisioning.
+
+                // Stop enforcing location before clearing the owner role:
+                // cancel the periodic worker, stop the real-time watch, and
+                // release control so the user regains full control of the
+                // location toggle. (The owner role is about to be cleared, so
+                // a final apply() would be pointless.)
+                locationEnforcement.cancelReapply()
+                locationEnforcement.stopRealtimeWatch()
+                locationEnforcement.release()
+
                 devicePolicyManager.clearDeviceOwnerApp(context.packageName)
                 Log.i(TAG, "Device Owner CLEARED — app is now uninstallable")
 

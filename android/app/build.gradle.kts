@@ -8,6 +8,12 @@ plugins {
 dependencies {
     // NotificationCompat + ServiceInfo helpers used by AppLockForegroundService.
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // WorkManager — used by LocationEnforcementWorker to periodically re-apply
+    // the forced location-on setting (Android has no user-restriction that
+    // locks location ON, so the user can still toggle it off in Settings; the
+    // worker re-enables it within ~15 minutes).
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
 
 android {

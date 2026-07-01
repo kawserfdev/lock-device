@@ -17,6 +17,11 @@ import '../controllers/welcome_controller.dart';
 /// user accounts. When that path is unavailable, the view shows the
 /// `adb shell dpm set-device-owner` command instead, which works in both debug
 /// and release builds.
+///
+/// In addition to Device Owner permission, the Continue button is gated on the
+/// device location (GPS) service being enabled. The GPS state is observed
+/// reactively via the `geolocator` `ServiceStatus` stream, so the button
+/// becomes active the instant the user turns location on in system Settings.
 class WelcomeView extends GetView<WelcomeController> {
   /// Constructs the welcome view.
   const WelcomeView({super.key});
@@ -56,6 +61,8 @@ class WelcomeView extends GetView<WelcomeController> {
               const _ProvisioningGuidance(),
               const SizedBox(height: 32),
               const _EnableButton(),
+              const SizedBox(height: 12),
+              const _LocationStatusCard(),
               const SizedBox(height: 12),
               const _ContinueButton(),
             ],
@@ -99,8 +106,7 @@ class _WarningCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
-                color: theme.colorScheme.error),
+            Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -146,11 +152,11 @@ class _PermissionStatusCard extends StatelessWidget {
   }
 
   String _label(PermissionStatus status) => switch (status) {
-        PermissionStatus.granted => 'Granted — you may continue.',
-        PermissionStatus.denied =>
-          'Not granted. Provision the app as Device Owner below.',
-        PermissionStatus.unknown => 'Checking…',
-      };
+    PermissionStatus.granted => 'Granted — you may continue.',
+    PermissionStatus.denied =>
+      'Not granted. Provision the app as Device Owner below.',
+    PermissionStatus.unknown => 'Checking…',
+  };
 }
 
 /// Shows the appropriate provisioning guidance depending on whether in-app
@@ -195,8 +201,10 @@ class _InAppProvisioningHint extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.info_outline,
-                color: theme.colorScheme.onSecondaryContainer),
+            Icon(
+              Icons.info_outline,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -213,8 +221,7 @@ class _InAppProvisioningHint extends StatelessWidget {
 }
 
 class _AdbProvisioningCard extends StatelessWidget {
-  const _AdbProvisioningCard(
-      {required this.controller, required this.theme});
+  const _AdbProvisioningCard({required this.controller, required this.theme});
   final WelcomeController controller;
   final ThemeData theme;
 
@@ -246,14 +253,16 @@ class _AdbProvisioningCard extends StatelessWidget {
             _PrerequisiteStep(
               theme: theme,
               number: '1',
-              text: 'Remove ALL accounts on the device: Settings → '
+              text:
+                  'Remove ALL accounts on the device: Settings → '
                   'Passwords & accounts → select each account → Remove.',
             ),
             const SizedBox(height: 8),
             _PrerequisiteStep(
               theme: theme,
               number: '2',
-              text: 'Run the adb command above from a computer with USB '
+              text:
+                  'Run the adb command above from a computer with USB '
                   'debugging connected.',
             ),
             const SizedBox(height: 8),
@@ -308,9 +317,7 @@ class _PrerequisiteStep extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Expanded(
-          child: Text(text, style: theme.textTheme.bodyMedium),
-        ),
+        Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
       ],
     );
   }
@@ -383,26 +390,152 @@ class _EnableButton extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.admin_panel_settings),
-        label: Text(controller.isLoading.value
-            ? 'Requesting…'
-            : 'Enable Device Owner'),
+        label: Text(
+          controller.isLoading.value ? 'Requesting…' : 'Enable Device Owner',
+        ),
       );
     });
   }
 }
 
+/// Card showing the live device location (GPS) service status.
+///
+/// Reflects [WelcomeController.isLocationEnabled] which is updated instantly
+/// via the `geolocator` `ServiceStatus` stream. Gives the user a visible
+/// hint that GPS must be on before they can continue, and offers a direct
+/// shortcut to the system location settings screen.
+class _LocationStatusCard extends StatelessWidget {
+  const _LocationStatusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final WelcomeController controller = Get.find();
+    return Obx(() {
+      final bool enabled = controller.isLocationEnabled.value;
+      return Card(
+        child: ListTile(
+          leading: Icon(
+            enabled ? Icons.location_on : Icons.location_off,
+            color: enabled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.error,
+          ),
+          title: const Text('Device Location (GPS)'),
+          subtitle: Text(
+            enabled
+                ? 'Enabled — you may continue.'
+                : 'Enable location to continue.',
+          ),
+          trailing: enabled
+              ? null
+              : GestureDetector(
+                  onTap: () => controller.openLocationSettings(),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.settings, size: 18),
+                      SizedBox(height: 6),
+                      Text('Open Settings'),
+                    ],
+                  ),
+                ),
+        ),
+      );
+    });
+  }
+}
+
+/// Continue button gated on **both** Device Owner permission and GPS.
+///
+/// Behaviour:
+/// - Permission not granted → fully disabled (not tappable).
+/// - Permission granted, GPS OFF → visually greyed but still tappable; tapping
+///   shows a native-style dialog prompting the user to enable location (with a
+///   button that opens the system location settings). The button is kept
+///   tappable so the user gets actionable feedback instead of a dead control.
+/// - Permission granted, GPS ON → active/coloured; tapping navigates to the
+///   Status screen.
+///
+/// The GPS state is reactive ([WelcomeController.isLocationEnabled] is fed by
+/// the `geolocator` `ServiceStatus` stream), so the button becomes active the
+/// instant the user turns location on in system Settings — no manual refresh
+/// needed.
 class _ContinueButton extends StatelessWidget {
   const _ContinueButton();
 
   @override
   Widget build(BuildContext context) {
     final WelcomeController controller = Get.find();
-    return Obx(() => FilledButton.tonalIcon(
-          onPressed: controller.canProceed
-              ? () => Get.toNamed<void>('/status')
-              : null,
+    final ThemeData theme = Theme.of(context);
+    return Obx(() {
+      final bool permissionGranted =
+          controller.permissionStatus.value == PermissionStatus.granted;
+      final bool locationOn = controller.isLocationEnabled.value;
+
+      // When permission is not granted the button is fully disabled (not
+      // tappable) — the user must provision Device Owner first.
+      if (!permissionGranted) {
+        return FilledButton.tonalIcon(
+          onPressed: null,
           icon: const Icon(Icons.arrow_forward),
           label: const Text('Continue'),
-        ));
+        );
+      }
+
+      // Permission is granted. The button is always tappable so we can show a
+      // location prompt when GPS is off, but it is visually greyed to signal
+      // that the user cannot proceed yet.
+      return FilledButton.tonalIcon(
+        onPressed: () {
+          if (locationOn) {
+            Get.toNamed<void>('/status');
+          } else {
+            _showLocationRequiredDialog(context, controller);
+          }
+        },
+        style: locationOn
+            ? null
+            : FilledButton.styleFrom(
+                foregroundColor: theme.disabledColor,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              ),
+        icon: Icon(locationOn ? Icons.arrow_forward : Icons.location_off),
+        label: Text(locationOn ? 'Continue' : 'Location is OFF'),
+      );
+    });
+  }
+
+  /// Native-style alert dialog shown when the user taps Continue while GPS is
+  /// off. Offers a direct shortcut to the system location settings screen.
+  void _showLocationRequiredDialog(
+    BuildContext context,
+    WelcomeController controller,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        icon: const Icon(Icons.location_off),
+        title: const Text('Location Required'),
+        content: const Text(
+          'Device location (GPS) must be turned ON to continue. '
+          'This keeps the device trackable while the installment locker '
+          'protection is active.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              controller.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 }

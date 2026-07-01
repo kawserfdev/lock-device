@@ -6,16 +6,20 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../domain/entities/app_state.dart';
+import '../../../domain/usecases/check_location_enabled_usecase.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
 import '../../../domain/usecases/check_provisioning_allowed_usecase.dart';
+import '../../../domain/usecases/open_location_settings_usecase.dart';
 import '../../../domain/usecases/request_permission_usecase.dart';
+import '../../../domain/usecases/watch_location_status_usecase.dart';
 import '../../../domain/usecases/watch_permission_usecase.dart';
 
 /// ViewModel for the Welcome screen.
 ///
-/// Holds the Device Owner permission status as reactive state and exposes
-/// actions to check and request permission. This controller contains no UI
-/// code — it only manages state and delegates to use cases.
+/// Holds the Device Owner permission status and the device location (GPS)
+/// service status as reactive state, and exposes actions to check/request
+/// permission and to open the system location settings. This controller
+/// contains no UI code — it only manages state and delegates to use cases.
 ///
 /// Permission flow (architecture review §5.1 — dual confirmation):
 /// 1. On init, the current status is pulled via [CheckPermissionUseCase].
@@ -27,6 +31,16 @@ import '../../../domain/usecases/watch_permission_usecase.dart';
 ///    `didChangeAppLifecycleState` and re-checks on resume. This catches the
 ///    case where the receiver callback is delayed or the user navigates back
 ///    without the event firing.
+///
+/// Location flow (mirrors the dual-confirmation pattern):
+/// 1. On init, the current GPS status is pulled via
+///    [CheckLocationEnabledUseCase].
+/// 2. The controller subscribes to [WatchLocationStatusUseCase], the push
+///    stream
+///    fed by the `geolocator` plugin's `ServiceStatus` stream. This updates the
+///    Continue button the instant the user toggles location on/off in Settings.
+/// 3. On resume (after the user returns from the location settings screen) the
+///    status is re-checked as a safety net.
 ///
 /// Device Owner provisioning reality:
 /// Device Owner cannot be granted via a simple in-app toggle on a device that
@@ -41,15 +55,24 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
     required RequestPermissionUseCase requestPermissionUseCase,
     required WatchPermissionUseCase watchPermissionUseCase,
     required CheckProvisioningAllowedUseCase checkProvisioningAllowedUseCase,
+    required CheckLocationEnabledUseCase checkLocationEnabledUseCase,
+    required WatchLocationStatusUseCase watchLocationStatusUseCase,
+    required OpenLocationSettingsUseCase openLocationSettingsUseCase,
   })  : _checkPermissionUseCase = checkPermissionUseCase,
         _requestPermissionUseCase = requestPermissionUseCase,
         _watchPermissionUseCase = watchPermissionUseCase,
-        _checkProvisioningAllowedUseCase = checkProvisioningAllowedUseCase;
+        _checkProvisioningAllowedUseCase = checkProvisioningAllowedUseCase,
+        _checkLocationEnabledUseCase = checkLocationEnabledUseCase,
+        _watchLocationStatusUseCase = watchLocationStatusUseCase,
+        _openLocationSettingsUseCase = openLocationSettingsUseCase;
 
   final CheckPermissionUseCase _checkPermissionUseCase;
   final RequestPermissionUseCase _requestPermissionUseCase;
   final WatchPermissionUseCase _watchPermissionUseCase;
   final CheckProvisioningAllowedUseCase _checkProvisioningAllowedUseCase;
+  final CheckLocationEnabledUseCase _checkLocationEnabledUseCase;
+  final WatchLocationStatusUseCase _watchLocationStatusUseCase;
+  final OpenLocationSettingsUseCase _openLocationSettingsUseCase;
 
   /// Reactive permission status displayed on the Welcome screen.
   final Rx<PermissionStatus> permissionStatus =
@@ -65,7 +88,15 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   /// in-app provisioning button.
   final RxBool isProvisioningAllowed = false.obs;
 
+  /// Whether the device location (GPS) service is currently enabled.
+  ///
+  /// Drives the Continue button's enabled state: the user may only proceed
+  /// when both Device Owner permission is granted **and** location is on.
+  /// Updated instantly via the `geolocator` `ServiceStatus` stream.
+  final RxBool isLocationEnabled = false.obs;
+
   StreamSubscription<PermissionStatus>? _permissionSub;
+  StreamSubscription<bool>? _locationStatusSub;
 
   @override
   void onInit() {
@@ -73,6 +104,7 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _refreshPermission();
     _refreshProvisioningAllowed();
+    _refreshLocationEnabled();
     _permissionSub = _watchPermissionUseCase.call().listen(
       (status) {
         AppLogger.debug('Permission stream emitted: $status');
@@ -81,16 +113,27 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
       onError: (Object e) =>
           AppLogger.error('Permission stream error', error: e),
     );
+    // Subscribe to the geolocator ServiceStatus stream so the Continue button
+    // reacts the instant the user toggles location on/off in system Settings.
+    _locationStatusSub = _watchLocationStatusUseCase.call().listen(
+      (enabled) {
+        AppLogger.debug('Location status stream emitted: $enabled');
+        isLocationEnabled.value = enabled;
+      },
+      onError: (Object e) =>
+          AppLogger.error('Location status stream error', error: e),
+    );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Re-check on resume: the user may have just acted on the system
-    // provisioning screen. This is the pull-based half of the dual-confirmation
-    // pattern.
+    // provisioning screen or the location settings screen. This is the
+    // pull-based half of the dual-confirmation pattern for both flows.
     if (state == AppLifecycleState.resumed) {
-      AppLogger.debug('App resumed — re-checking permission');
+      AppLogger.debug('App resumed — re-checking permission & location');
       _refreshPermission();
+      _refreshLocationEnabled();
     }
   }
 
@@ -103,6 +146,11 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   Future<void> _refreshProvisioningAllowed() async {
     isProvisioningAllowed.value =
         await _checkProvisioningAllowedUseCase.call();
+  }
+
+  /// Re-checks the current device location (GPS) service status.
+  Future<void> _refreshLocationEnabled() async {
+    isLocationEnabled.value = await _checkLocationEnabledUseCase.call();
   }
 
   /// Requests Device Owner permission via the managed-provisioning intent.
@@ -120,8 +168,23 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Opens the system location settings screen so the user can turn GPS on.
+  ///
+  /// Called by the Continue button when the user taps it while location is off.
+  /// Returns `true` when the settings screen was successfully launched.
+  Future<bool> openLocationSettings() async {
+    return _openLocationSettingsUseCase.call();
+  }
+
   /// Whether the user may proceed past the Welcome screen.
-  bool get canProceed => permissionStatus.value == PermissionStatus.granted;
+  ///
+  /// Requires **both** Device Owner permission to be granted **and** the
+  /// device location (GPS) service to be enabled. The location gate ensures
+  /// the device stays trackable once the Installment Locker's protections are
+  /// activated on the next screen.
+  bool get canProceed =>
+      permissionStatus.value == PermissionStatus.granted &&
+      isLocationEnabled.value;
 
   /// The `adb shell dpm set-device-owner` command the user can run to make
   /// this app the Device Owner.
@@ -136,6 +199,7 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() {
     _permissionSub?.cancel();
+    _locationStatusSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppLogger.debug('WelcomeController closed');
     super.onClose();

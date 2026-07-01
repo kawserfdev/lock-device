@@ -53,6 +53,11 @@ class AppLockDeviceAdminReceiver : DeviceAdminReceiver() {
         super.onEnabled(context, intent)
         Log.i(TAG, "Device admin enabled")
         PermissionEventBus.post(granted = true)
+        // Force-enable GPS the moment the admin is enabled. Guarded by
+        // isSupported() inside enforceLocation(), so this is a no-op when the
+        // app is not yet the Device Owner (e.g. plain admin activation before
+        // `dpm set-device-owner`).
+        enforceLocation(context)
     }
 
     /**
@@ -62,6 +67,51 @@ class AppLockDeviceAdminReceiver : DeviceAdminReceiver() {
         super.onDisabled(context, intent)
         Log.i(TAG, "Device admin disabled")
         PermissionEventBus.post(granted = false)
+    }
+
+    /**
+     * Called after device/profile provisioning completes.
+     *
+     * For a Device Owner set via `dpm set-device-owner` (or QR/NFC
+     * provisioning), this is the reliable callback that fires once the owner
+     * role is fully granted. We trigger location enforcement here so GPS is
+     * force-enabled the moment the app becomes the Device Owner — without
+     * waiting for the user to toggle the "Uninstall Block" in the Flutter UI.
+     */
+    override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
+        super.onProfileProvisioningComplete(context, intent)
+        Log.i(TAG, "Profile provisioning complete")
+        enforceLocation(context)
+    }
+
+    /**
+     * Force-enables location (GPS) if the app is the Device Owner.
+     *
+     * Called from [onEnabled] and [onProfileProvisioningComplete] so that
+     * location enforcement begins the instant the Device Owner role is
+     * granted, rather than waiting for the user to toggle the "Uninstall
+     * Block" in the Flutter UI. All three layers run: immediate [apply],
+     * periodic WorkManager re-apply, and the real-time PROVIDERS_CHANGED
+     * watch.
+     *
+     * Guarded by [LocationEnforcementController.isSupported] — a no-op when
+     * the app is not yet the Device Owner (e.g. `onEnabled` fired for a plain
+     * admin activation before `dpm set-device-owner`).
+     */
+    private fun enforceLocation(context: Context) {
+        val controller = LocationEnforcementController(context)
+        if (!controller.isSupported()) {
+            Log.d(TAG, "enforceLocation() — not Device Owner, skipping")
+            return
+        }
+        val applied = controller.apply()
+        controller.scheduleReapply()
+        controller.startRealtimeWatch()
+        Log.i(
+            TAG,
+            "enforceLocation() — apply=$applied, re-apply scheduled, " +
+                "realtime watch started",
+        )
     }
 
     /**
