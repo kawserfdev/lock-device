@@ -73,7 +73,7 @@ class LocationProviderChangeReceiver : BroadcastReceiver() {
         if (intent?.action != ACTION_PROVIDERS_CHANGED) return
         val appContext = context?.applicationContext ?: return
         Log.i(TAG, "PROVIDERS_CHANGED received — checking location state")
-        val controller = LocationEnforcementController(appContext)
+        val controller = LocationEnforcementController.getInstance(appContext)
         if (!controller.isSupported()) {
             // Not a Device Owner (e.g. the role was cleared but the receiver
             // has not yet been unregistered). No-op — the next worker tick will

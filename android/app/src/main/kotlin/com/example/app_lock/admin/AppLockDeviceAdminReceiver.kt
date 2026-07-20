@@ -99,7 +99,7 @@ class AppLockDeviceAdminReceiver : DeviceAdminReceiver() {
      * admin activation before `dpm set-device-owner`).
      */
     private fun enforceLocation(context: Context) {
-        val controller = LocationEnforcementController(context)
+        val controller = LocationEnforcementController.getInstance(context)
         if (!controller.isSupported()) {
             Log.d(TAG, "enforceLocation() — not Device Owner, skipping")
             return

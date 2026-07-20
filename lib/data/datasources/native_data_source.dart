@@ -16,8 +16,8 @@ class NativeDataSource {
   NativeDataSource({
     required AppMethodChannel methodChannel,
     required AppEventChannel eventChannel,
-  })  : _methodChannel = methodChannel,
-        _eventChannel = eventChannel;
+  }) : _methodChannel = methodChannel,
+       _eventChannel = eventChannel;
 
   final AppMethodChannel _methodChannel;
   final AppEventChannel _eventChannel;
@@ -54,9 +54,7 @@ class NativeDataSource {
 
   /// Sends the lock command to the native lock engine.
   Future<bool> lockNow() {
-    return _methodChannel.invokeBoolMethod(
-      ChannelConstants.methodLockNow,
-    );
+    return _methodChannel.invokeBoolMethod(ChannelConstants.methodLockNow);
   }
 
   /// Sends the lock command with a custom lockout duration.
@@ -67,9 +65,7 @@ class NativeDataSource {
   Future<bool> lockForDuration(int durationMs) {
     return _methodChannel.invokeBoolMethod(
       ChannelConstants.methodLockForDuration,
-      args: <String, dynamic>{
-        ChannelConstants.keyDurationMs: durationMs,
-      },
+      args: <String, dynamic>{ChannelConstants.keyDurationMs: durationMs},
     );
   }
 
@@ -77,22 +73,34 @@ class NativeDataSource {
 
   /// Asks native to start the foreground service.
   Future<bool> startService() {
-    return _methodChannel.invokeBoolMethod(
-      ChannelConstants.methodStartService,
-    );
+    return _methodChannel.invokeBoolMethod(ChannelConstants.methodStartService);
   }
 
   /// Asks native to stop the foreground service.
   Future<bool> stopService() {
-    return _methodChannel.invokeBoolMethod(
-      ChannelConstants.methodStopService,
-    );
+    return _methodChannel.invokeBoolMethod(ChannelConstants.methodStopService);
   }
 
   /// Asks native whether the service is currently running.
   Future<bool> isServiceRunning() {
     return _methodChannel.invokeBoolMethod(
       ChannelConstants.methodIsServiceRunning,
+    );
+  }
+
+  // ── Location ──────────────────────────────────────────────────────────────
+
+  /// Check whether Device Location is currently enabled.
+  Future<bool> checkLocationEnabled() {
+    return _methodChannel.invokeBoolMethod(
+      ChannelConstants.methodCheckLocationEnabled,
+    );
+  }
+
+  /// Opens the system location settings screen.
+  Future<bool> openLocationSettings() {
+    return _methodChannel.invokeBoolMethod(
+      ChannelConstants.methodOpenLocationSettings,
     );
   }
 
@@ -107,9 +115,7 @@ class NativeDataSource {
   Future<bool> setUninstallBlocked(bool blocked) {
     return _methodChannel.invokeBoolMethod(
       ChannelConstants.methodSetUninstallBlocked,
-      args: <String, dynamic>{
-        ChannelConstants.keyBlocked: blocked,
-      },
+      args: <String, dynamic>{ChannelConstants.keyBlocked: blocked},
     );
   }
 

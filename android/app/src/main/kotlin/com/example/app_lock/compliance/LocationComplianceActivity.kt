@@ -17,7 +17,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.core.content.ContextCompat
 import com.example.app_lock.R
-import com.example.app_lock.admin.LocationEnforcementController
 
 /**
  * Full-screen, non-dismissible compliance Activity shown when the user has
@@ -98,8 +97,7 @@ class LocationComplianceActivity : ComponentActivity() {
         }
     }
 
-    private lateinit var controller: LocationEnforcementController
-    private lateinit var lockTaskController: LockTaskController
+
 
     private lateinit var countdownText: TextView
     private lateinit var locationStatusText: TextView
@@ -112,7 +110,7 @@ class LocationComplianceActivity : ComponentActivity() {
     private val locationPollRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            if (controller.isLocationEnabled()) {
+            if (LocationComplianceCoordinator.isLocationEnabled()) {
                 Log.i(TAG, "locationPoll — location ON; auto-dismissing")
                 LocationComplianceCoordinator.onLocationEnabled()
                 return // do not re-post; we are finishing
@@ -142,8 +140,6 @@ class LocationComplianceActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "onCreate() — compliance Activity launched")
-        controller = LocationEnforcementController(applicationContext)
-        lockTaskController = LockTaskController(applicationContext)
 
         // Keep the screen on and show over the lock screen.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -210,8 +206,8 @@ class LocationComplianceActivity : ComponentActivity() {
      * interception alone.
      */
     private fun startLockTaskMode() {
-        val armed = lockTaskController.arm()
-        if (!armed || !lockTaskController.isAllowlisted()) {
+        val armed = LocationComplianceCoordinator.lockTaskController.arm()
+        if (!armed || !LocationComplianceCoordinator.lockTaskController.isAllowlisted()) {
             Log.w(TAG, "startLockTaskMode — allowlist not set; skipping pin (non-DO or arm failed)")
             return
         }
@@ -243,7 +239,7 @@ class LocationComplianceActivity : ComponentActivity() {
                 Log.w(TAG, "stopLockTaskMode — stopLockTask failed", e)
             }
         }
-        runCatching { lockTaskController.disarm() }
+        runCatching { LocationComplianceCoordinator.lockTaskController.disarm() }
             .onFailure { Log.w(TAG, "stopLockTaskMode — disarm failed", it) }
     }
 
@@ -286,7 +282,7 @@ class LocationComplianceActivity : ComponentActivity() {
      * live settings and the coordinator state.
      */
     private fun refreshStatus() {
-        val locationOn = controller.isLocationEnabled()
+        val locationOn = LocationComplianceCoordinator.isLocationEnabled()
         locationStatusText.text = getString(
             if (locationOn) R.string.location_compliance_status_on
             else R.string.location_compliance_status_off,

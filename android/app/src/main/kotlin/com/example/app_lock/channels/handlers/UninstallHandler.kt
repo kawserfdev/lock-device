@@ -1,20 +1,20 @@
 package com.example.app_lock.channels.handlers
 
 import android.util.Log
-import com.example.app_lock.admin.UninstallBlockController
+import com.example.app_lock.admin.UninstallBlockOperations
 
 /**
  * Handles uninstall-block method calls coming from Flutter.
  *
  * This is a thin dispatcher: it routes each method name to the
- * [UninstallBlockController] and translates the outcome into the primitive
+ * [UninstallBlockOperations] and translates the outcome into the primitive
  * `Boolean` that the MethodChannel contract expects.
  *
  * No business logic lives here — capability detection, restriction
  * application, and event emission all live in [UninstallBlockController].
  */
 class UninstallHandler(
-    private val uninstallController: UninstallBlockController,
+    private val uninstallController: UninstallBlockOperations,
 ) {
 
     companion object {

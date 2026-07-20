@@ -35,6 +35,8 @@ class LockCountdownTimer(
     @Volatile
     private var armed: Boolean = false
 
+    private var pendingRunnable: Runnable? = null
+
     /**
      * Arms the timer: schedules [onComplete] to run after
      * [Constants.LOCK_DELAY_MS].
@@ -49,11 +51,14 @@ class LockCountdownTimer(
         }
         Log.d(TAG, "Arming countdown for ${Constants.LOCK_DELAY_MS}ms")
         armed = true
-        handler.postDelayed({
+        val runnable = Runnable {
             armed = false
+            pendingRunnable = null
             Log.d(TAG, "Countdown elapsed — firing onComplete")
             onComplete()
-        }, Constants.LOCK_DELAY_MS)
+        }
+        pendingRunnable = runnable
+        handler.postDelayed(runnable, Constants.LOCK_DELAY_MS)
     }
 
     /**
@@ -62,9 +67,10 @@ class LockCountdownTimer(
      * Safe to call when not armed (no-op).
      */
     fun cancel() {
-        if (armed) {
+        if (armed || pendingRunnable != null) {
             Log.d(TAG, "Cancelling armed countdown")
-            handler.removeCallbacksAndMessages(null)
+            pendingRunnable?.let { handler.removeCallbacks(it) }
+            pendingRunnable = null
             armed = false
         }
     }

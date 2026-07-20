@@ -1,8 +1,12 @@
 package com.example.app_lock.channels
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import com.example.app_lock.admin.LocationEnforcementController
 import com.example.app_lock.channels.handlers.AppLockHandler
 import com.example.app_lock.channels.handlers.PermissionHandler
 import com.example.app_lock.channels.handlers.UninstallHandler
@@ -24,6 +28,7 @@ import com.example.app_lock.util.Constants
  * methods surface as `notImplemented`.
  */
 class LockMethodChannel(
+    private val context: Context,
     private val permissionHandler: PermissionHandler,
     private val appLockHandler: AppLockHandler,
     private val uninstallHandler: UninstallHandler,
@@ -58,6 +63,18 @@ class LockMethodChannel(
                 }
                 Constants.METHOD_IS_UNINSTALL_BLOCKED -> uninstallHandler.isUninstallBlocked()
                 Constants.METHOD_IS_UNINSTALL_BLOCK_SUPPORTED -> uninstallHandler.isUninstallBlockSupported()
+                Constants.METHOD_CHECK_LOCATION_ENABLED -> {
+                    LocationEnforcementController.getInstance(context).isLocationEnabled()
+                }
+                Constants.METHOD_OPEN_LOCATION_SETTINGS -> {
+                    runCatching {
+                        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        true
+                    }.getOrElse { false }
+                }
                 else -> {
                     result.notImplemented()
                     return

@@ -69,14 +69,8 @@ class LocationEnforcementWorker(
 
     override suspend fun doWork(): Result {
         Log.d(TAG, "doWork() — re-applying forced location-on")
-        val controller = LocationEnforcementController(applicationContext)
+        val controller = LocationEnforcementController.getInstance(applicationContext)
         val applied = controller.apply()
-        // Re-register the real-time PROVIDERS_CHANGED receiver so the watch
-        // self-heals after process death. Idempotent: a no-op if already
-        // registered (e.g. the process never died). Guarded by isSupported()
-        // inside startRealtimeWatch(), so it is a no-op after the Device Owner
-        // role is cleared.
-        controller.startRealtimeWatch()
         // Reconcile the compliance state machine with the live location
         // setting. This is the self-healing path after process death: if the
         // process was killed mid-enforcement (e.g. during a grace countdown or
@@ -85,6 +79,12 @@ class LocationEnforcementWorker(
         // no-op when enforcement is not armed.
         LocationComplianceCoordinator.init(applicationContext)
         LocationComplianceCoordinator.evaluateAfterApply(controller)
+        // Re-register the real-time PROVIDERS_CHANGED receiver so the watch
+        // self-heals after process death. Idempotent: a no-op if already
+        // registered (e.g. the process never died). Guarded by isSupported()
+        // inside startRealtimeWatch(), so it is a no-op after the Device Owner
+        // role is cleared.
+        controller.startRealtimeWatch()
         Log.i(
             TAG,
             "doWork() — apply=$applied; location on=${controller.isLocationEnabled()}; " +

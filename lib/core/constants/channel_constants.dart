@@ -51,6 +51,12 @@ class ChannelConstants {
   static const String methodIsUninstallBlockSupported =
       'isUninstallBlockSupported';
 
+  /// Check whether Device Location is currently enabled.
+  static const String methodCheckLocationEnabled = 'checkLocationEnabled';
+
+  /// Open Android Location Source settings.
+  static const String methodOpenLocationSettings = 'openLocationSettings';
+
   // ── Event types (EventChannel) ─────────────────────────────────────────────
 
   /// Emitted when the device-admin permission state changes.

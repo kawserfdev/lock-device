@@ -15,7 +15,7 @@ import androidx.core.content.edit
  *    coordinator state is lost; the WorkManager worker and the foreground
  *    service restart restore it from this store.
  * 2. **Service restart** — `START_STICKY` services are restarted by the OS
- *    with a `null` intent after a kill. [LocationComplianceForegroundService]
+ *    with a `null` intent after a kill. [EnforcementForegroundService]
  *    reads this store in `onStartCommand` to rebuild the coordinator state.
  * 3. **Device reboot** — a manifest-registered
  *    [LocationComplianceBootReceiver] fires on `BOOT_COMPLETED` and reads this

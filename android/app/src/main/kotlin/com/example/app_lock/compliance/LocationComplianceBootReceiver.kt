@@ -62,8 +62,14 @@ class LocationComplianceBootReceiver : BroadcastReceiver() {
         }
         Log.i(TAG, "onReceive() — enforcement was armed; starting compliance foreground service")
         runCatching {
-            val serviceIntent = Intent(appContext, LocationComplianceForegroundService::class.java)
-            appContext.startService(serviceIntent)
+            val serviceIntent = Intent(appContext, com.example.app_lock.service.EnforcementForegroundService::class.java).apply {
+                action = com.example.app_lock.service.EnforcementForegroundService.ACTION_START_COMPLIANCE_MONITOR
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                appContext.startForegroundService(serviceIntent)
+            } else {
+                appContext.startService(serviceIntent)
+            }
         }.onFailure { Log.e(TAG, "onReceive() — failed to start foreground service", it) }
     }
 }

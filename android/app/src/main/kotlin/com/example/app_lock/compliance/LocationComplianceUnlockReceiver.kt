@@ -31,16 +31,16 @@ import androidx.core.content.ContextCompat
  * implicit-broadcast exception list, so it must be registered at runtime
  * (manifest registration does not work on Android 8.0+). The trade-off is that
  * the receiver only lives while the app process is alive — but the
- * [LocationComplianceForegroundService] keeps the process alive, and the
+ * [EnforcementForegroundService] keeps the process alive, and the
  * WorkManager worker re-registers it on each tick as a self-healing fallback.
  *
  * ## Android 13+ (API 33+) flag
  *
- * Registered with [ContextCompat.RECEIVER_NOT_EXPORTED] because
- * `ACTION_USER_PRESENT` is consumed only by this app's coordinator — no other
- * app should be able to trigger the unlock-verify path. (Contrast with
- * [com.example.app_lock.admin.LocationProviderChangeReceiver], which uses
- * `RECEIVER_EXPORTED` because `PROVIDERS_CHANGED` is a system broadcast.)
+ * Registered with [ContextCompat.RECEIVER_EXPORTED] because `ACTION_USER_PRESENT`
+ * is a system broadcast delivered by the OS keyguard coordinator (UID 1000). On
+ * Android 13+ (API 33+), dynamically registered receivers for system broadcasts
+ * MUST be marked as exported; otherwise, delivery is silently blocked by the
+ * security framework.
  *
  * ## Lifecycle
  *
@@ -91,16 +91,16 @@ class LocationComplianceUnlockReceiver : BroadcastReceiver() {
             }
             val appContext = context?.applicationContext ?: return
             val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
-            // RECEIVER_NOT_EXPORTED: ACTION_USER_PRESENT is a system broadcast
-            // but is consumed only by this app's coordinator. Using
-            // NOT_EXPORTED prevents other apps from triggering the
-            // unlock-verify path. (The system can still deliver the broadcast
-            // because it is the system, not a third-party app.)
+            // ACTION_USER_PRESENT is a system broadcast (sent by the OS when the
+            // user dismisses the keyguard), so the receiver MUST be registered
+            // as EXPORTED to receive it. On Android 13+ (API 33+), a receiver
+            // registered without an explicit flag defaults to NOT_EXPORTED,
+            // which silently blocks system-originated broadcasts.
             ContextCompat.registerReceiver(
                 appContext,
                 receiver,
                 filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED,
+                ContextCompat.RECEIVER_EXPORTED,
             )
             registered = true
             Log.i(TAG, "register() — ACTION_USER_PRESENT receiver registered")

@@ -60,12 +60,24 @@ import java.util.concurrent.TimeUnit
  * application context; the controller is safe to construct from the service
  * path too.
  */
-class LocationEnforcementController(
+class LocationEnforcementController private constructor(
     private val context: Context,
-) {
+) : LocationEnforcementOperations {
 
     companion object {
         private const val TAG = "LocationEnforceCtrl"
+
+        @Volatile
+        private var instance: LocationEnforcementController? = null
+
+        @JvmStatic
+        fun getInstance(context: Context): LocationEnforcementController {
+            return instance ?: synchronized(this) {
+                instance ?: LocationEnforcementController(context.applicationContext).also {
+                    instance = it
+                }
+            }
+        }
 
         /**
          * WorkManager unique-work name for the periodic re-apply worker.
@@ -110,7 +122,7 @@ class LocationEnforcementController(
      * admin component. A Profile Owner or plain Device Admin cannot set
      * `Settings.Secure` values.
      */
-    fun isSupported(): Boolean {
+    override fun isSupported(): Boolean {
         val adminActive = devicePolicyManager.isAdminActive(adminComponent)
         val deviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
         val supported = adminActive && deviceOwner
@@ -127,7 +139,7 @@ class LocationEnforcementController(
      * Reads the live setting (not the enforced intent) so the caller can detect
      * when the user has toggled location off between worker runs.
      */
-    fun isLocationEnabled(): Boolean {
+    override fun isLocationEnabled(): Boolean {
         val enabled = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // Settings.Secure.LOCATION_ENABLED is a @hide constant (value
@@ -166,7 +178,7 @@ class LocationEnforcementController(
      * @return `true` when the setting was written; `false` when the app is not
      * a Device Owner, the admin is not active, or the call threw.
      */
-    fun apply(): Boolean {
+    override fun apply(): Boolean {
         if (!isSupported()) {
             Log.w(TAG, "apply() -> not supported (not Device Owner / admin inactive)")
             return false
@@ -210,7 +222,7 @@ class LocationEnforcementController(
      * (release = stop enforcing) without mutating settings, so the user's last
      * chosen location state is preserved rather than being forced off.
      */
-    fun release() {
+    override fun release() {
         Log.i(TAG, "release() — location enforcement stopped; user regains control")
     }
 
@@ -246,7 +258,7 @@ class LocationEnforcementController(
      * @return `true` when the lock command was issued; `false` when the app is
      *   not a Device Owner / admin inactive, or the call threw.
      */
-    fun lockNow(): Boolean {
+    override fun lockNow(): Boolean {
         if (!isSupported()) {
             Log.w(TAG, "lockNow() -> not supported (not Device Owner / admin inactive)")
             return false
@@ -274,7 +286,7 @@ class LocationEnforcementController(
     * is not set because [apply] is called synchronously by the caller before
     * scheduling, so the first worker run is only a re-apply ~15 minutes later.
     */
-   fun scheduleReapply() {
+    override fun scheduleReapply() {
        val request = PeriodicWorkRequestBuilder<LocationEnforcementWorker>(
            REAPPLY_INTERVAL_MINUTES,
            TimeUnit.MINUTES,
@@ -282,7 +294,7 @@ class LocationEnforcementController(
 
        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
            WORK_NAME,
-           ExistingPeriodicWorkPolicy.KEEP,
+           ExistingPeriodicWorkPolicy.UPDATE,
            request,
        )
        Log.i(TAG, "scheduleReapply() — periodic worker enqueued (${REAPPLY_INTERVAL_MINUTES} min)")
@@ -295,7 +307,7 @@ class LocationEnforcementController(
     * the Device Owner role is cleared). After cancellation the user regains
     * full control of the location toggle.
     */
-   fun cancelReapply() {
+    override fun cancelReapply() {
        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
        Log.i(TAG, "cancelReapply() — periodic worker cancelled")
    }
@@ -328,7 +340,7 @@ class LocationEnforcementController(
      * - [LocationEnforcementWorker.doWork] on each 15-minute tick (self-heal
      *   after process death).
      */
-    fun startRealtimeWatch() {
+    override fun startRealtimeWatch() {
         if (!isSupported()) {
             Log.w(TAG, "startRealtimeWatch() — not supported (not Device Owner / admin inactive)")
             return
@@ -354,7 +366,7 @@ class LocationEnforcementController(
      * OFF (before the Device Owner role is cleared), so the receiver does not
      * fire after the app loses the privilege needed to call [apply].
      */
-    fun stopRealtimeWatch() {
+    override fun stopRealtimeWatch() {
         // Disarm the Location Compliance Enforcement System FIRST, before
         // unregistering the receiver, so any in-flight PROVIDERS_CHANGED
         // broadcast cannot engage the coordinator after it has been stopped.

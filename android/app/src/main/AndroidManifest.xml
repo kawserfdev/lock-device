@@ -56,31 +56,13 @@
             android:turnScreenOn="true"
             android:theme="@style/ComplianceTheme" />
 
-        <!-- ── Foreground service ─────────────────────────────────────────── -->
-        <!-- specialUse type required on Android 14+; the <property> declares the
-             declared use case for Play Console review. -->
         <service
-            android:name=".service.AppLockForegroundService"
+            android:name=".service.EnforcementForegroundService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Enforces the installment lock when the static overdue condition is met." />
-        </service>
-
-        <!-- ── Location Compliance Foreground Service ─────────────────────── -->
-        <!-- Keeps the app process alive while the compliance enforcement ladder
-             is active, so the grace/lock countdowns (posted to the main Handler)
-             survive screen-off, app-swipe, and process trimming. Started by
-             LocationComplianceCoordinator.start(); restored on START_STICKY
-             restart via LocationComplianceCoordinator.restore(). -->
-        <service
-            android:name=".compliance.LocationComplianceForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the Location Compliance Enforcement System alive while enforcing that Device Location remains enabled." />
+                android:value="Enforces the installment lock and location compliance monitoring rules." />
         </service>
 
         <!-- ── Location Compliance Boot Receiver ──────────────────────────── -->

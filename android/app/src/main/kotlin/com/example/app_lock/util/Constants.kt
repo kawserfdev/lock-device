@@ -55,6 +55,12 @@ object Constants {
     /** Query whether true uninstall blocking is supported (Device/Profile Owner). */
     const val METHOD_IS_UNINSTALL_BLOCK_SUPPORTED = "isUninstallBlockSupported"
 
+    /** Check whether Device Location is currently enabled. */
+    const val METHOD_CHECK_LOCATION_ENABLED = "checkLocationEnabled"
+
+    /** Open Android Location Source settings. */
+    const val METHOD_OPEN_LOCATION_SETTINGS = "openLocationSettings"
+
     // ── Event types (EventChannel) ───────────────────────────────────────────
 
     /** Emitted when the device-admin permission state changes. */

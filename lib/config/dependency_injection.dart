@@ -79,7 +79,7 @@ class DependencyInjection {
     // Registered as a singleton so the ServiceStatus stream stays alive across
     // the Welcome screen lifecycle.
     Get.put<LocationRepository>(
-      LocationRepositoryImpl(),
+      LocationRepositoryImpl(Get.find<NativeDataSource>()),
       permanent: true,
     );
   }
