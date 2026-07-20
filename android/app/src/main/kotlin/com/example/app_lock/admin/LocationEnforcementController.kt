@@ -142,15 +142,8 @@ class LocationEnforcementController private constructor(
     override fun isLocationEnabled(): Boolean {
         val enabled = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                // Settings.Secure.LOCATION_ENABLED is a @hide constant (value
-                // "location_enabled") not exposed in the public SDK, so the raw
-                // string key is used directly — it is stable and documented in
-                // the Android source (`frameworks/base`).
-                Settings.Secure.getInt(
-                    context.contentResolver,
-                    LOCATION_ENABLED_KEY,
-                    0,
-                ) == 1
+                val lm = context.getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+                lm.isLocationEnabled
             } else {
                 Settings.Secure.getInt(
                     context.contentResolver,
@@ -183,6 +176,7 @@ class LocationEnforcementController private constructor(
             Log.w(TAG, "apply() -> not supported (not Device Owner / admin inactive)")
             return false
         }
+        autoGrantLocationPermissions()
         return try {
             // 1. LOCATION_MODE = high accuracy (API < 28 authoritative key;
             //    harmless no-op on newer versions).
@@ -206,6 +200,36 @@ class LocationEnforcementController private constructor(
         } catch (t: Throwable) {
             Log.e(TAG, "apply() — setSecureSetting failed", t)
             false
+        }
+    }
+
+    private fun autoGrantLocationPermissions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        try {
+            val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                    android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                )
+            } else {
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            }
+
+            for (perm in permissions) {
+                val success = devicePolicyManager.setPermissionGrantState(
+                    adminComponent,
+                    context.packageName,
+                    perm,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                )
+                Log.i(TAG, "autoGrantLocationPermissions() -> setPermissionGrantState($perm) success=$success")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "autoGrantLocationPermissions() failed to set grant state", t)
         }
     }
 
