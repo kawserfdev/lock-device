@@ -36,6 +36,26 @@
             </intent-filter>
         </activity>
 
+        <!-- ── Location Compliance Activity ───────────────────────────────── -->
+        <!-- Full-screen, non-dismissible compliance screen shown when the user
+             disables Device Location while the Installment Locker's protection
+             is active. Launched by LocationComplianceCoordinator with
+             FLAG_ACTIVITY_NEW_TASK | CLEAR_TASK | EXCLUDE_FROM_RECENTS.
+             - exported=false: only the app's own coordinator launches it.
+             - showWhenLocked/turnScreenOn: visible over the lock screen so the
+               countdown is always shown.
+             - excludeFromRecents: the compliance screen is not a user task.
+             - noHistory: the system will not retain it in the back stack after
+               it finishes (defence-in-depth alongside the back-press callback). -->
+        <activity
+            android:name=".compliance.LocationComplianceActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/ComplianceTheme" />
+
         <!-- ── Foreground service ─────────────────────────────────────────── -->
         <!-- specialUse type required on Android 14+; the <property> declares the
              declared use case for Play Console review. -->
@@ -47,6 +67,36 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Enforces the installment lock when the static overdue condition is met." />
         </service>
+
+        <!-- ── Location Compliance Foreground Service ─────────────────────── -->
+        <!-- Keeps the app process alive while the compliance enforcement ladder
+             is active, so the grace/lock countdowns (posted to the main Handler)
+             survive screen-off, app-swipe, and process trimming. Started by
+             LocationComplianceCoordinator.start(); restored on START_STICKY
+             restart via LocationComplianceCoordinator.restore(). -->
+        <service
+            android:name=".compliance.LocationComplianceForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the Location Compliance Enforcement System alive while enforcing that Device Location remains enabled." />
+        </service>
+
+        <!-- ── Location Compliance Boot Receiver ──────────────────────────── -->
+        <!-- Restores the compliance enforcement state after a device reboot.
+             BOOT_COMPLETED is on the implicit-broadcast exception list, so
+             manifest registration is valid. If enforcement was armed before the
+             reboot, the receiver starts the compliance foreground service,
+             which calls LocationComplianceCoordinator.restore() to reconcile the
+             persisted state with the live location setting. -->
+        <receiver
+            android:name=".compliance.LocationComplianceBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- ── Device Admin receiver ──────────────────────────────────────── -->
         <!-- Bound to res/xml/device_admin.xml (force-lock policy only). -->

@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.app_lock.compliance.LocationComplianceCoordinator
 import java.util.concurrent.TimeUnit
 
 /**
@@ -213,6 +214,53 @@ class LocationEnforcementController(
         Log.i(TAG, "release() — location enforcement stopped; user regains control")
     }
 
+    /**
+     * Immediately locks the device via [DevicePolicyManager.lockNow].
+     *
+     * Used by the Location Compliance Enforcement System as the escalation
+     * step when the 2-minute grace countdown expires and the user has not
+     * re-enabled location. Locking the device forces the user to dismiss the
+     * compliance screen and confront the lock screen; when they unlock, the
+     * [compliance.LocationComplianceUnlockReceiver] re-verifies location and,
+     * if it is still off, re-launches the compliance screen with a fresh
+     * countdown — repeating the lock-then-verify loop until location is
+     * enabled.
+     *
+     * ## Capability
+     *
+     * `lockNow()` requires an active admin (Device Owner or a Device Admin
+     * with the `force-lock` policy). [isSupported] already checks Device
+     * Owner + admin active, which is the strongest guarantee, so this method
+     * re-uses that check. A Profile Owner can also call `lockNow()`, but this
+     * controller is only ever constructed when the Device Owner role is held,
+     * so the simpler check is sufficient.
+     *
+     * ## Android 12–15 notes
+     *
+     * `lockNow()` is supported on all API levels the app targets. No extra
+     * flags are passed — the default behavior (lock now, require the user's
+     * PIN/pattern/biometric to unlock) is exactly what the enforcement loop
+     * needs. `FLAG_EVICT_CREDENTIAL_KEY` is intentionally not used because we
+     * *want* the user to be able to unlock (so we can re-verify location).
+     *
+     * @return `true` when the lock command was issued; `false` when the app is
+     *   not a Device Owner / admin inactive, or the call threw.
+     */
+    fun lockNow(): Boolean {
+        if (!isSupported()) {
+            Log.w(TAG, "lockNow() -> not supported (not Device Owner / admin inactive)")
+            return false
+        }
+        return try {
+            devicePolicyManager.lockNow()
+            Log.i(TAG, "lockNow() — device locked (compliance escalation)")
+            true
+        } catch (t: Throwable) {
+            Log.e(TAG, "lockNow() — DevicePolicyManager.lockNow failed", t)
+            false
+        }
+    }
+
    /**
     * Enqueues the periodic [LocationEnforcementWorker] that re-applies the
     * forced location-on setting.
@@ -286,6 +334,14 @@ class LocationEnforcementController(
             return
         }
         LocationProviderChangeReceiver.register(context)
+        // Arm the Location Compliance Enforcement System. start() is idempotent:
+        // it marks enforcement armed in the persisted store, starts the
+        // compliance foreground service (keeping the process alive across
+        // screen-off / app-swipe), and evaluates the live location state to
+        // resume any in-progress enforcement. This is the single integration
+        // point that connects the location-enforcement layer to the compliance
+        // state machine.
+        LocationComplianceCoordinator.start(context)
     }
 
     /**
@@ -299,6 +355,14 @@ class LocationEnforcementController(
      * fire after the app loses the privilege needed to call [apply].
      */
     fun stopRealtimeWatch() {
+        // Disarm the Location Compliance Enforcement System FIRST, before
+        // unregistering the receiver, so any in-flight PROVIDERS_CHANGED
+        // broadcast cannot engage the coordinator after it has been stopped.
+        // stop() is idempotent: it cancels countdowns, dismisses the compliance
+        // screen, releases Lock Task Mode, disarms the unlock receiver, stops
+        // the compliance foreground service, and clears the persisted state so a
+        // stale state cannot trigger enforcement after a reboot.
+        LocationComplianceCoordinator.stop()
         LocationProviderChangeReceiver.unregister(context)
     }
 }

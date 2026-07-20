@@ -15,4 +15,14 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- Material 3 theme for the Location Compliance Activity.
+         MaterialCardView / MaterialButton enforce a Material theme at inflation
+         time (ThemeEnforcement), and the compliance layout references Material 3
+         attributes (?attr/textAppearanceHeadlineSmall, ?attr/textAppearanceDisplayMedium,
+         ?attr/colorError) that framework themes do not provide.
+         Theme.Material3.DayNight.NoActionBar supplies all of them and auto-switches
+         light/dark based on the system night-mode setting, so a single definition
+         here covers both values/ and values-night/. -->
+    <style name="ComplianceTheme" parent="Theme.Material3.DayNight.NoActionBar" />
 </resources>

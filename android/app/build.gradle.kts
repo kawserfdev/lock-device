@@ -14,6 +14,17 @@ dependencies {
     // locks location ON, so the user can still toggle it off in Settings; the
     // worker re-enables it within ~15 minutes).
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Material Components — used by the Location Compliance Activity layout
+    // (MaterialCardView, MaterialButton) and the Material 3 theme attributes
+    // (?attr/colorError, ?attr/textAppearance*). Brings in the transitive
+    // dependency on the AppCompat theme used by @style/NormalTheme.
+    implementation("com.google.android.material:material:1.12.0")
+
+    // Activity — provides ComponentActivity + OnBackPressedDispatcher used by
+    // LocationComplianceActivity for the non-dismissible back-press handling
+    // (Android 13+ predictive-back compatible).
+    implementation("androidx.activity:activity-ktx:1.9.0")
 }
 
 android {

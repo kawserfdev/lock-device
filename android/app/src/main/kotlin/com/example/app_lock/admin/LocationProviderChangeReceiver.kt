@@ -6,11 +6,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.example.app_lock.compliance.LocationComplianceCoordinator
 
 /**
  * Standalone [BroadcastReceiver] that listens for
- * `android.location.PROVIDERS_CHANGED` and instantly force-enables GPS back ON
- * via [LocationEnforcementController.apply] when the user toggles location off.
+ * `android.location.PROVIDERS_CHANGED` and notifies the
+ * [LocationComplianceCoordinator] when the user toggles location off (or back
+ * on), engaging the Location Compliance Enforcement ladder (grace countdown →
+ * compliance screen → `lockNow()` → unlock-verify loop).
  *
  * ## Why a standalone class
  *
@@ -78,11 +81,18 @@ class LocationProviderChangeReceiver : BroadcastReceiver() {
             Log.d(TAG, "onReceive — not supported (not Device Owner), skipping")
             return
         }
+        // Initialize the compliance coordinator (idempotent) so it can read its
+        // persisted state and engage / disengage the enforcement ladder. The
+        // coordinator's onLocationDisabled / onLocationEnabled methods are
+        // themselves guarded by isArmed(), so they are no-ops when the
+        // Installment Locker's "Uninstall Block" protection is inactive.
+        LocationComplianceCoordinator.init(appContext)
         if (!controller.isLocationEnabled()) {
-            Log.w(TAG, "onReceive — location OFF, force-enabling via setSecureSetting")
-            controller.apply()
+            Log.w(TAG, "onReceive — location OFF; notifying compliance coordinator")
+            LocationComplianceCoordinator.onLocationDisabled()
         } else {
-            Log.d(TAG, "onReceive — location still ON, no action needed")
+            Log.d(TAG, "onReceive — location ON; notifying compliance coordinator")
+            LocationComplianceCoordinator.onLocationEnabled()
         }
     }
 

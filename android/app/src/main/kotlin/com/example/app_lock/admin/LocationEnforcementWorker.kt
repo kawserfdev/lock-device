@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.app_lock.compliance.LocationComplianceCoordinator
 
 /**
  * Periodic WorkManager worker that re-applies the forced location-on setting.
@@ -27,9 +28,13 @@ import androidx.work.WorkerParameters
  *
  * The worker is a thin wrapper: it constructs a
  * [LocationEnforcementController] with the application context, calls
- * [LocationEnforcementController.apply], and **re-registers the real-time
+ * [LocationEnforcementController.apply], **re-registers the real-time
  * [LocationProviderChangeReceiver]** so the watch self-heals after the app
- * process has been killed and the runtime receiver was lost.
+ * process has been killed and the runtime receiver was lost, and then calls
+ * [LocationComplianceCoordinator.evaluateAfterApply] so the compliance state
+ * machine is reconciled with the live location setting — resuming any
+ * in-progress enforcement (grace countdown, compliance screen, or the
+ * lock-then-verify loop) that was lost when the process died.
  *
  * ## Why re-register here
  *
@@ -72,10 +77,19 @@ class LocationEnforcementWorker(
         // inside startRealtimeWatch(), so it is a no-op after the Device Owner
         // role is cleared.
         controller.startRealtimeWatch()
+        // Reconcile the compliance state machine with the live location
+        // setting. This is the self-healing path after process death: if the
+        // process was killed mid-enforcement (e.g. during a grace countdown or
+        // while the compliance screen was showing), the coordinator resumes the
+        // appropriate step. init() is idempotent; evaluateAfterApply() is a
+        // no-op when enforcement is not armed.
+        LocationComplianceCoordinator.init(applicationContext)
+        LocationComplianceCoordinator.evaluateAfterApply(controller)
         Log.i(
             TAG,
             "doWork() — apply=$applied; location on=${controller.isLocationEnabled()}; " +
-                "watchRegistered=${LocationProviderChangeReceiver.isRegistered()}",
+                "watchRegistered=${LocationProviderChangeReceiver.isRegistered()}; " +
+                "complianceState=${LocationComplianceCoordinator.stateName()}",
         )
         // Always success: a transient failure is retried on the next periodic
         // tick; we do not want WorkManager's exponential back-off here.

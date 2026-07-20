@@ -5,4 +5,33 @@
     <string name="foreground_notification_title">App Lock Active</string>
     <string name="foreground_notification_text">Monitoring installments in the background.</string>
     <string name="foreground_channel_description">Keeps the App Lock service running so it can enforce the lock when due.</string>
+
+    <!-- ── Location Compliance Enforcement System ─────────────────────────── -->
+
+    <!-- Compliance Activity UI -->
+    <string name="location_compliance_title">Location Required</string>
+    <string name="location_compliance_message">Device Location must remain enabled to continue using this device. Please turn on Location in Settings.</string>
+    <string name="location_compliance_open_settings">Enable Location</string>
+    <string name="location_compliance_retry">Retry Detection</string>
+    <string name="location_compliance_emergency">Emergency Contact</string>
+    <string name="location_compliance_icon_description">Location warning icon</string>
+
+    <!-- Status labels -->
+    <string name="location_compliance_label_location_status">Current Location Status</string>
+    <string name="location_compliance_label_device_status">Device Status</string>
+    <string name="location_compliance_label_compliance_status">Compliance Status</string>
+
+    <!-- Status values -->
+    <string name="location_compliance_status_on">ON</string>
+    <string name="location_compliance_status_off">OFF</string>
+    <string name="location_compliance_device_locked">Locked</string>
+    <string name="location_compliance_device_unlocked">Unlocked</string>
+    <string name="location_compliance_compliance_status">%1$s</string>
+    <string name="location_compliance_countdown_expired">Locking…</string>
+
+    <!-- Compliance foreground service notification -->
+    <string name="location_compliance_notification_title">Location Compliance Active</string>
+    <string name="location_compliance_notification_text">Monitoring that Device Location stays enabled.</string>
+    <string name="location_compliance_channel_name">Location Compliance Service</string>
+    <string name="location_compliance_channel_description">Keeps the Location Compliance enforcement system running in the background.</string>
 </resources>
