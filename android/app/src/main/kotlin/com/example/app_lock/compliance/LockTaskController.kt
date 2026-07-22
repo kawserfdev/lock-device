@@ -81,6 +81,24 @@ class LockTaskController(context: Context) {
         private val COMPLIANCE_FEATURES =
             DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
                 DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+
+        /**
+         * Lock Task feature flags applied while the Status ("App Lock Time
+         * counter") screen is pinned in kiosk mode.
+         *
+         * Every escape affordance is disabled so the user cannot leave the
+         * screen via the system navigation buttons:
+         * - `LOCK_TASK_FEATURE_HOME` — excluded (no Home button).
+         * - `LOCK_TASK_FEATURE_OVERVIEW` — excluded (no Recents button).
+         * - `LOCK_TASK_FEATURE_SYSTEM_INFO` — excluded (no status bar / Quick
+         *   Settings; the Status screen needs no system escape).
+         * - `LOCK_TASK_FEATURE_NOTIFICATIONS` — excluded (no notification tray).
+         * - `LOCK_TASK_FEATURE_KEYGUARD` — excluded (no lock screen).
+         *
+         * `LOCK_TASK_FEATURE_NONE` leaves only the Back gesture, which the
+         * Flutter side intercepts via `PopScope`.
+         */
+        val KIOSK_FEATURES = DevicePolicyManager.LOCK_TASK_FEATURE_NONE
     }
 
     private val appContext = context.applicationContext
@@ -122,9 +140,28 @@ class LockTaskController(context: Context) {
      * @return `true` when the allowlist was set; `false` when not supported or
      *   the call threw.
      */
-    fun arm(): Boolean {
+    fun arm(): Boolean = arm(COMPLIANCE_FEATURES)
+
+    /**
+     * Allowlists this app's package for Lock Task Mode and applies the given
+     * [features] flag set.
+     *
+     * Overload used by callers that need a different feature configuration
+     * than the compliance screen — e.g. the Status ("App Lock Time counter")
+     * screen, which pins with [KIOSK_FEATURES] to disable every system
+     * navigation affordance.
+     *
+     * Must be called **before** [android.app.Activity.startLockTask] is invoked
+     * on the host Activity, otherwise `startLockTask` shows the user-confirm
+     * dialog (which the user could dismiss). Idempotent — safe to call
+     * repeatedly.
+     *
+     * @return `true` when the allowlist was set; `false` when not supported or
+     *   the call threw.
+     */
+    fun arm(features: Int): Boolean {
         if (!isSupported()) {
-            Log.w(TAG, "arm() -> not supported (not Device Owner / admin inactive)")
+            Log.w(TAG, "arm(features=$features) -> not supported (not Device Owner / admin inactive)")
             return false
         }
         return try {
@@ -133,17 +170,12 @@ class LockTaskController(context: Context) {
                 adminComponent,
                 arrayOf(appContext.packageName),
             )
-            // Apply the compliance feature flags so the user can reach
-            // Location Settings (via the status bar / Quick Settings) but
-            // cannot escape to arbitrary apps.
-            devicePolicyManager.setLockTaskFeatures(
-                adminComponent,
-                COMPLIANCE_FEATURES,
-            )
-            Log.i(TAG, "arm() — allowlist + features set (features=$COMPLIANCE_FEATURES)")
+            // Apply the requested feature flags.
+            devicePolicyManager.setLockTaskFeatures(adminComponent, features)
+            Log.i(TAG, "arm(features=$features) — allowlist + features set")
             true
         } catch (t: Throwable) {
-            Log.e(TAG, "arm() — setLockTaskPackages/features failed", t)
+            Log.e(TAG, "arm(features=$features) — setLockTaskPackages/features failed", t)
             false
         }
     }

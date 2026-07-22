@@ -7,11 +7,13 @@ import '../core/platform/app_method_channel.dart';
 import '../data/datasources/local_data_source.dart';
 import '../data/datasources/native_data_source.dart';
 import '../data/repositories/background_service_repository_impl.dart';
+import '../data/repositories/kiosk_repository_impl.dart';
 import '../data/repositories/location_repository_impl.dart';
 import '../data/repositories/lock_repository_impl.dart';
 import '../data/repositories/permission_repository_impl.dart';
 import '../data/repositories/uninstall_repository_impl.dart';
 import '../domain/repositories/background_service_repository.dart';
+import '../domain/repositories/kiosk_repository.dart';
 import '../domain/repositories/location_repository.dart';
 import '../domain/repositories/lock_repository.dart';
 import '../domain/repositories/permission_repository.dart';
@@ -72,6 +74,12 @@ class DependencyInjection {
     );
     Get.put<UninstallRepository>(
       UninstallRepositoryImpl(nativeDataSource: Get.find<NativeDataSource>()),
+      permanent: true,
+    );
+    // Kiosk repository — drives Android Lock Task Mode (screen pinning) so the
+    // Status screen can disable the Back / Home / Recents buttons while visible.
+    Get.put<KioskRepository>(
+      KioskRepositoryImpl(nativeDataSource: Get.find<NativeDataSource>()),
       permanent: true,
     );
     // Location repository — backed by the `geolocator` plugin (separate from

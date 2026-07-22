@@ -61,6 +61,14 @@ object Constants {
     /** Open Android Location Source settings. */
     const val METHOD_OPEN_LOCATION_SETTINGS = "openLocationSettings"
 
+    /** Pin the host Activity via Android Lock Task Mode (screen pinning) so the
+     *  Back / Home / Recents buttons are disabled while the Status screen is
+     *  visible. */
+    const val METHOD_ENABLE_KIOSK_MODE = "enableKioskMode"
+
+    /** Release the Lock Task Mode pin applied by [METHOD_ENABLE_KIOSK_MODE]. */
+    const val METHOD_DISABLE_KIOSK_MODE = "disableKioskMode"
+
     // ── Event types (EventChannel) ───────────────────────────────────────────
 
     /** Emitted when the device-admin permission state changes. */

@@ -10,6 +10,7 @@ import com.example.app_lock.admin.UninstallBlockController
 import com.example.app_lock.channels.EventBridge
 import com.example.app_lock.channels.LockMethodChannel
 import com.example.app_lock.channels.handlers.AppLockHandler
+import com.example.app_lock.channels.handlers.KioskModeHandler
 import com.example.app_lock.channels.handlers.PermissionHandler
 import com.example.app_lock.channels.handlers.UninstallHandler
 import com.example.app_lock.permissions.ActivityLauncher
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
 
     private lateinit var engineBootstrap: EngineBootstrap
     private var activityLauncher: ActivityLauncher? = null
+    private val kioskHandler = KioskModeHandler()
 
     private val permissionBusListener = PermissionEventBus.Listener { granted ->
         engineBootstrap.eventBridge.emitPermissionChanged(granted)
@@ -70,12 +72,18 @@ class MainActivity : FlutterActivity() {
         )
         val uninstallHandler = UninstallHandler(engineBootstrap.uninstallBlockOperations)
 
-        // 5. Method channel registration
+        // 6. Kiosk-mode handler — binds this Activity so Lock Task Mode
+        //    (screen pinning) can disable the Home / Recents buttons while
+        //    the Status ("App Lock Time counter") screen is visible.
+        kioskHandler.attachActivity(this)
+
+        // 7. Method channel registration
         LockMethodChannel(
             context = this,
             permissionHandler = permissionHandler,
             appLockHandler = appLockHandler,
             uninstallHandler = uninstallHandler,
+            kioskHandler = kioskHandler,
         ).register(messenger)
     }
 
@@ -84,6 +92,9 @@ class MainActivity : FlutterActivity() {
         // Clean up the activityLauncher attachment to avoid memory leaks
         engineBootstrap.uninstallBlockOperations.setActivityLauncher(null)
         activityLauncher = null
+        // Release the kiosk pin (best-effort) and clear the activity reference.
+        kioskHandler.disableKioskMode()
+        kioskHandler.detachActivity()
         super.onDestroy()
     }
 }

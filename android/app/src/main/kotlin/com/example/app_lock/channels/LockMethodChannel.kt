@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.example.app_lock.admin.LocationEnforcementController
 import com.example.app_lock.channels.handlers.AppLockHandler
+import com.example.app_lock.channels.handlers.KioskModeHandler
 import com.example.app_lock.channels.handlers.PermissionHandler
 import com.example.app_lock.channels.handlers.UninstallHandler
 import com.example.app_lock.util.Constants
@@ -32,6 +33,7 @@ class LockMethodChannel(
     private val permissionHandler: PermissionHandler,
     private val appLockHandler: AppLockHandler,
     private val uninstallHandler: UninstallHandler,
+    private val kioskHandler: KioskModeHandler,
 ) : MethodChannel.MethodCallHandler {
 
     /**
@@ -75,6 +77,8 @@ class LockMethodChannel(
                         true
                     }.getOrElse { false }
                 }
+                Constants.METHOD_ENABLE_KIOSK_MODE -> kioskHandler.enableKioskMode()
+                Constants.METHOD_DISABLE_KIOSK_MODE -> kioskHandler.disableKioskMode()
                 else -> {
                     result.notImplemented()
                     return

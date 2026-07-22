@@ -134,6 +134,30 @@ class NativeDataSource {
     );
   }
 
+  // ── Kiosk mode (Lock Task Mode / screen pinning) ────────────────────────────
+
+  /// Asks native to pin the host Activity via Android Lock Task Mode so the
+  /// Home and Recents buttons are disabled while the Status screen is visible.
+  ///
+  /// Returns `true` when the pin was started; `false` when the device is not
+  /// a Device Owner (Lock Task Mode allowlist cannot be set) or the call
+  /// failed. The Back gesture is intercepted on the Flutter side via
+  /// `PopScope`, so the screen stays non-dismissible regardless of the native
+  /// outcome.
+  Future<bool> enableKioskMode() {
+    return _methodChannel.invokeBoolMethod(
+      ChannelConstants.methodEnableKioskMode,
+    );
+  }
+
+  /// Asks native to release the Lock Task Mode pin applied by
+  /// [enableKioskMode] and restore normal navigation.
+  Future<bool> disableKioskMode() {
+    return _methodChannel.invokeBoolMethod(
+      ChannelConstants.methodDisableKioskMode,
+    );
+  }
+
   // ── Event streams ─────────────────────────────────────────────────────────
 
   /// Stream of permission-state change events from native.

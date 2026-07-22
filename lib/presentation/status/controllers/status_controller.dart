@@ -6,6 +6,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../domain/entities/app_state.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
+import '../../../domain/usecases/disable_kiosk_mode_usecase.dart';
+import '../../../domain/usecases/enable_kiosk_mode_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/lock_for_duration_usecase.dart';
@@ -48,6 +50,8 @@ class StatusController extends GetxController {
     required IsUninstallBlockedUseCase isUninstallBlockedUseCase,
     required IsUninstallBlockSupportedUseCase isUninstallBlockSupportedUseCase,
     required WatchUninstallBlockUseCase watchUninstallBlockUseCase,
+    required EnableKioskModeUseCase enableKioskModeUseCase,
+    required DisableKioskModeUseCase disableKioskModeUseCase,
   }) : _checkPermissionUseCase = checkPermissionUseCase,
        _startServiceUseCase = startServiceUseCase,
        _stopServiceUseCase = stopServiceUseCase,
@@ -59,7 +63,9 @@ class StatusController extends GetxController {
        _setUninstallBlockedUseCase = setUninstallBlockedUseCase,
        _isUninstallBlockedUseCase = isUninstallBlockedUseCase,
        _isUninstallBlockSupportedUseCase = isUninstallBlockSupportedUseCase,
-       _watchUninstallBlockUseCase = watchUninstallBlockUseCase;
+       _watchUninstallBlockUseCase = watchUninstallBlockUseCase,
+       _enableKioskModeUseCase = enableKioskModeUseCase,
+       _disableKioskModeUseCase = disableKioskModeUseCase;
 
   final CheckPermissionUseCase _checkPermissionUseCase;
   final StartServiceUseCase _startServiceUseCase;
@@ -73,6 +79,8 @@ class StatusController extends GetxController {
   final IsUninstallBlockedUseCase _isUninstallBlockedUseCase;
   final IsUninstallBlockSupportedUseCase _isUninstallBlockSupportedUseCase;
   final WatchUninstallBlockUseCase _watchUninstallBlockUseCase;
+  final EnableKioskModeUseCase _enableKioskModeUseCase;
+  final DisableKioskModeUseCase _disableKioskModeUseCase;
 
   /// Reactive aggregate state rendered by the Status screen.
   final Rx<AppState> state = const AppState(
@@ -84,6 +92,11 @@ class StatusController extends GetxController {
 
   /// Whether an action is currently in flight.
   final RxBool isBusy = false.obs;
+
+  /// Whether Android Lock Task Mode (screen pinning) is currently active,
+  /// disabling the Back / Home / Recents buttons while the Status screen is
+  /// visible. Toggled on in [onInit] and off in [onClose] / [exitKiosk].
+  final RxBool isKioskActive = false.obs;
 
   /// User-selected lock duration in minutes for the timed-lock feature.
   final RxInt selectedLockMinutes = 5.obs;
@@ -110,6 +123,48 @@ class StatusController extends GetxController {
     _subscribeLockResult();
     _subscribeLockoutState();
     _subscribeUninstallBlock();
+    // Pin this Activity via Android Lock Task Mode (screen pinning) so the
+    // Back / Home / Recents buttons are disabled while the Status screen is
+    // visible. Requires the app to be Device Owner; on unsupported devices
+    // the call is a no-op and [isKioskActive] stays `false`.
+    enableKiosk();
+  }
+
+  /// Enables Android Lock Task Mode (screen pinning) for the host Activity.
+  ///
+  /// On success the Back / Home / Recents buttons are disabled and
+  /// [isKioskActive] flips to `true`. On unsupported devices (not Device
+  /// Owner) the call returns `false` and the UI remains dismissible.
+  Future<void> enableKiosk() async {
+    try {
+      final bool ok = await _enableKioskModeUseCase.call();
+      isKioskActive.value = ok;
+      if (ok) {
+        AppLogger.debug('Kiosk mode (Lock Task Mode) enabled');
+      } else {
+        AppLogger.warning('Kiosk mode not enabled — device not supported');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to enable kiosk mode', error: e);
+    }
+  }
+
+  /// Releases the Lock Task Mode pin and (optionally) navigates away.
+  ///
+  /// Called by the Status screen's "Exit" affordance. After releasing, the
+  /// system navigation buttons behave normally again.
+  Future<void> exitKiosk() async {
+    try {
+      final bool ok = await _disableKioskModeUseCase.call();
+      isKioskActive.value = false;
+      if (ok) {
+        AppLogger.debug('Kiosk mode (Lock Task Mode) disabled');
+      } else {
+        AppLogger.warning('Kiosk mode disable reported not-supported');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to disable kiosk mode', error: e);
+    }
   }
 
   /// Subscribes to native service-state changes (push path).
@@ -346,6 +401,12 @@ class StatusController extends GetxController {
     _lockResultSub?.cancel();
     _lockoutStateSub?.cancel();
     _uninstallBlockSub?.cancel();
+    // Release the Lock Task Mode pin so the system navigation buttons behave
+    // normally once the Status screen is no longer visible.
+    _disableKioskModeUseCase.call().catchError((Object e) {
+      AppLogger.error('Failed to disable kiosk mode on close', error: e);
+      return false;
+    });
     AppLogger.debug('StatusController closed');
     super.onClose();
   }

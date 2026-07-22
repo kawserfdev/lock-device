@@ -57,6 +57,14 @@ class ChannelConstants {
   /// Open Android Location Source settings.
   static const String methodOpenLocationSettings = 'openLocationSettings';
 
+  /// Pin the host Activity via Android Lock Task Mode (screen pinning) so the
+  /// Back / Home / Recents buttons are disabled while the Status screen is
+  /// visible.
+  static const String methodEnableKioskMode = 'enableKioskMode';
+
+  /// Release the Lock Task Mode pin applied by [methodEnableKioskMode].
+  static const String methodDisableKioskMode = 'disableKioskMode';
+
   // ── Event types (EventChannel) ─────────────────────────────────────────────
 
   /// Emitted when the device-admin permission state changes.
