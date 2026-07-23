@@ -99,6 +99,25 @@ class LockTaskController(context: Context) {
          * Flutter side intercepts via `PopScope`.
          */
         val KIOSK_FEATURES = DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+
+        /**
+         * The AOSP Settings package, allowlisted alongside this app for the
+         * compliance screen so the "Enable Location" button can open Location
+         * Settings while the device is pinned in Lock Task Mode.
+         *
+         * In **true** Lock Task Mode (Device Owner allowlisted) only allowlisted
+         * packages can be launched; without Settings in the allowlist the
+         * `ACTION_LOCATION_SOURCE_SETTINGS` intent is silently blocked and the
+         * user is trapped with no way to satisfy the compliance condition — a
+         * deadlock where they cannot leave *and* cannot enable location.
+         *
+         * NOTE: a few OEM ROMs ship Settings under a different package (e.g.
+         * Xiaomi `com.miui.securitycenter`). On those ROMs the user can still
+         * toggle location from Quick Settings, which stays reachable because
+         * [COMPLIANCE_FEATURES] keeps [DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO]
+         * (the status bar) visible.
+         */
+        private const val SETTINGS_PACKAGE = "com.android.settings"
     }
 
     private val appContext = context.applicationContext
@@ -165,14 +184,23 @@ class LockTaskController(context: Context) {
             return false
         }
         return try {
-            // Allowlist only this app — no other package can be pinned.
-            devicePolicyManager.setLockTaskPackages(
-                adminComponent,
-                arrayOf(appContext.packageName),
-            )
+            // Allowlist this app AND the AOSP Settings package. In true Lock
+            // Task Mode (Device Owner allowlisted) only allowlisted packages
+            // may be launched; without Settings in the allowlist the
+            // "Enable Location" button's ACTION_LOCATION_SOURCE_SETTINGS intent
+            // is blocked and the user is deadlocked (cannot leave, cannot
+            // enable location). Settings is allowlisted only for the
+            // compliance feature set — the kiosk (Status screen) feature set
+            // is applied separately and does not need Settings.
+            val allowlisted = if (features == COMPLIANCE_FEATURES) {
+                arrayOf(appContext.packageName, SETTINGS_PACKAGE)
+            } else {
+                arrayOf(appContext.packageName)
+            }
+            devicePolicyManager.setLockTaskPackages(adminComponent, allowlisted)
             // Apply the requested feature flags.
             devicePolicyManager.setLockTaskFeatures(adminComponent, features)
-            Log.i(TAG, "arm(features=$features) — allowlist + features set")
+            Log.i(TAG, "arm(features=$features) — allowlist=${allowlisted.toList()}, features set")
             true
         } catch (t: Throwable) {
             Log.e(TAG, "arm(features=$features) — setLockTaskPackages/features failed", t)
@@ -222,5 +250,38 @@ class LockTaskController(context: Context) {
             Log.w(TAG, "isAllowlisted() — getLockTaskPackages failed", t)
             false
         }
+    }
+
+    /**
+     * Returns the current Lock Task mode state for diagnostic logging.
+     *
+     * - `0` = `LOCK_TASK_MODE_NONE` — Lock Task Mode is not active.
+     * - `1` = `LOCK_TASK_MODE_PINNED` — screen pinning (user-confirm dialog).
+     * - `2` = `LOCK_TASK_MODE_LOCKED` — true Lock Task Mode (Device Owner
+     *   allowlisted). This is the state that actually blocks Home / Recents.
+     *
+     * Only `LOCK_TASK_MODE_LOCKED` fully disables the system navigation
+     * buttons. `LOCK_TASK_MODE_PINNED` (screen pinning) shows a toast and
+     * the user can exit by holding Back + Recents simultaneously — it is NOT
+     * a true kiosk. This method lets the Activity log which mode it is in so
+     * we can verify the pin is the strong one.
+     */
+    fun getLockTaskModeState(): Int {
+        return try {
+            val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            am.lockTaskModeState
+        } catch (t: Throwable) {
+            Log.w(TAG, "getLockTaskModeState() — failed", t)
+            0
+        }
+    }
+
+    /**
+     * Human-readable name for [getLockTaskModeState] — for logging only.
+     */
+    fun getLockTaskModeStateName(): String = when (getLockTaskModeState()) {
+        1 -> "PINNED (screen pinning — user can escape via Back+Recents)"
+        2 -> "LOCKED (true Lock Task Mode — Home/Recents blocked)"
+        else -> "NONE (not pinned)"
     }
 }

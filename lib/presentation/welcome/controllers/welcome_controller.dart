@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
@@ -101,6 +102,7 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   @override
   void onInit() {
     super.onInit();
+    log("Command executed: $adbSetDeviceOwnerCommand");
     WidgetsBinding.instance.addObserver(this);
     _refreshPermission();
     _refreshProvisioningAllowed();

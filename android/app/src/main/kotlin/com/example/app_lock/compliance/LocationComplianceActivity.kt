@@ -106,13 +106,20 @@ class LocationComplianceActivity : ComponentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /**
+     * `true` once the Lock Task pin has been released (either via the
+     * auto-dismiss path or via [onDestroy]). Guards [stopLockTaskMode] so the
+     * pin is released exactly once and the allowlist is cleared exactly once,
+     * even if both the synchronous release path and `onDestroy` run.
+     */
+    @Volatile
+    private var lockTaskReleased = false
+
     /** Polls location state every [POLL_INTERVAL_MS]; auto-dismisses when ON. */
     private val locationPollRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            if (LocationComplianceCoordinator.isLocationEnabled()) {
-                Log.i(TAG, "locationPoll — location ON; auto-dismissing")
-                LocationComplianceCoordinator.onLocationEnabled()
+            if (checkAndDismissIfLocationEnabled(tag = "locationPoll")) {
                 return // do not re-post; we are finishing
             }
             mainHandler.postDelayed(this, POLL_INTERVAL_MS)
@@ -200,35 +207,64 @@ class LocationComplianceActivity : ComponentActivity() {
      * Pins this Activity via Lock Task Mode.
      *
      * First arms the [LockTaskController] allowlist (so `startLockTask` pins
-     * silently), then calls [startLockTask]. If the allowlist is not set
-     * (e.g. not Device Owner), `startLockTask` would show the user-confirm
-     * dialog — in that case we skip pinning and rely on the back-gesture
-     * interception alone.
+     * silently into the strong `LOCK_TASK_MODE_LOCKED` state), then calls
+     * [startLockTask]. If the allowlist is not set (e.g. not Device Owner),
+     * `startLockTask` would show the user-confirm dialog and pin into the weak
+     * `LOCK_TASK_MODE_PINNED` state (screen pinning) — in that case we skip
+     * pinning and rely on the back-gesture interception alone, because screen
+     * pinning lets the user escape by holding Back + Recents.
+     *
+     * After pinning, logs the actual [LockTaskController.getLockTaskModeStateName]
+     * so we can verify the strong mode was entered. Only
+     * `LOCK_TASK_MODE_LOCKED` (state == 2) fully blocks Home / Recents.
      */
     private fun startLockTaskMode() {
-        val armed = LocationComplianceCoordinator.lockTaskController.arm()
-        if (!armed || !LocationComplianceCoordinator.lockTaskController.isAllowlisted()) {
+        val controller = LocationComplianceCoordinator.lockTaskController
+        val supported = controller.isSupported()
+        val armed = controller.arm()
+        val allowlisted = controller.isAllowlisted()
+        Log.i(
+            TAG,
+            "startLockTaskMode — supported=$supported, armed=$armed, allowlisted=$allowlisted",
+        )
+        if (!armed || !allowlisted) {
             Log.w(TAG, "startLockTaskMode — allowlist not set; skipping pin (non-DO or arm failed)")
             return
         }
         runCatching {
             startLockTask()
-            Log.i(TAG, "startLockTaskMode — Lock Task Mode started")
+            Log.i(TAG, "startLockTaskMode — startLockTask() called")
         }.onFailure { Log.e(TAG, "startLockTaskMode — startLockTask failed", it) }
+        // Log the actual mode we ended up in. This is the key diagnostic: if
+        // it says "PINNED" instead of "LOCKED", Home/Recents are NOT blocked.
+        mainHandler.postDelayed({
+            Log.i(TAG, "startLockTaskMode — actual state: ${controller.getLockTaskModeStateName()}")
+        }, 300)
     }
 
     /**
      * Unpins this Activity via Lock Task Mode (best-effort).
+     *
+     * **Order matters:** `stopLockTask()` MUST be called BEFORE `disarm()`.
+     * `stopLockTask()` releases the pin while the app is still allowlisted;
+     * calling `disarm()` (which clears the allowlist) first can leave the
+     * device in an inconsistent state where the pin cannot be cleanly
+     * released. The previous implementation called `disarm()` from the
+     * coordinator BEFORE `stopLockTask()` ran in `onDestroy`, which is the
+     * inverted order — this is now corrected here.
      */
     private fun stopLockTaskMode() {
+        if (lockTaskReleased) {
+            Log.d(TAG, "stopLockTaskMode — already released; skipping")
+            return
+        }
+        lockTaskReleased = true
+        // 1. Release the pin FIRST (while still allowlisted).
         runCatching {
             // stopLockTask() is a safe no-op when not pinned: it throws
-            // IllegalStateException, which runCatching captures below. We do
-            // NOT use ActivityManager.isLockTaskModeActive() (deprecated API 29)
-            // or ActivityManager.lockTaskModeState (API 29+) because the
-            // try/catch path is simpler and works on every API level.
+            // IllegalStateException, which runCatching captures below.
             stopLockTask()
-            Log.i(TAG, "stopLockTaskMode — Lock Task Mode stopped")
+            Log.i(TAG, "stopLockTaskMode — stopLockTask() called; state=${LocationComplianceCoordinator.lockTaskController.getLockTaskModeStateName()}")
         }.onFailure { e ->
             // IllegalStateException is the expected "not pinned" case (e.g. we
             // never started Lock Task Mode, or the user already left it) — log
@@ -239,6 +275,7 @@ class LocationComplianceActivity : ComponentActivity() {
                 Log.w(TAG, "stopLockTaskMode — stopLockTask failed", e)
             }
         }
+        // 2. THEN clear the allowlist (disarm). Idempotent.
         runCatching { LocationComplianceCoordinator.lockTaskController.disarm() }
             .onFailure { Log.w(TAG, "stopLockTaskMode — disarm failed", it) }
     }
@@ -252,8 +289,18 @@ class LocationComplianceActivity : ComponentActivity() {
             IntentFilter(LocationComplianceCoordinator.ACTION_DISMISS_COMPLIANCE),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
-        // Start the pollers.
+        // The user may have just returned from the system Location Settings
+        // screen (the only navigation allowed while pinned). Check location
+        // immediately so that:
+        //  - backing out WITH location enabled  -> auto-dismisses instantly
+        //    (releases the Lock Task pin so the user can navigate freely);
+        //  - backing out WITHOUT enabling location -> stays pinned (the
+        //    poller below keeps the screen trapped until GPS is turned on).
         refreshStatus()
+        if (checkAndDismissIfLocationEnabled(tag = "onResume")) {
+            return // finishing; do not start the pollers
+        }
+        // Start the pollers.
         updateCountdownText()
         mainHandler.postDelayed(locationPollRunnable, POLL_INTERVAL_MS)
         mainHandler.postDelayed(countdownTickRunnable, COUNTDOWN_TICK_MS)
@@ -275,6 +322,44 @@ class LocationComplianceActivity : ComponentActivity() {
         // user somehow escaped). The coordinator escalates to LOCKED.
         // This is a no-op if location was already restored (state != COMPLIANCE_SCREEN).
         LocationComplianceCoordinator.onComplianceScreenDismissed()
+    }
+
+    /**
+     * Checks whether the device location service is enabled and, if so,
+     * auto-dismisses the compliance screen (releasing the Lock Task pin so
+     * the user can navigate freely).
+     *
+     * This is the **kiosk release gate**: while the compliance Activity is
+     * pinned the user may only reach Location Settings (via the "Enable
+     * Location" button). On return, this check runs immediately in
+     * [onResume] and again every [POLL_INTERVAL_MS] via [locationPollRunnable].
+     * If GPS is on the screen finishes and the pin is released; if GPS is
+     * still off the screen stays pinned and the user remains trapped.
+     *
+     * @param tag a log label identifying the caller ([onResume] vs. the poller).
+     * @return `true` when location is enabled and the screen is finishing.
+     */
+    private fun checkAndDismissIfLocationEnabled(tag: String): Boolean {
+        if (!LocationComplianceCoordinator.isLocationEnabled()) {
+            return false
+        }
+        Log.i(TAG, "$tag — location ON; auto-dismissing (releasing kiosk pin)")
+        // Notify the coordinator to clean up its state machine, cancel timers,
+        // and broadcast DISMISS (for any other listeners). The coordinator's
+        // onLocationEnabled() deliberately does NOT call releaseLockTask()
+        // (disarm) anymore — the Activity owns the FULL release sequence
+        // (stopLockTask() THEN disarm()) in the correct order. We do NOT rely
+        // on the async DISMISS broadcast to finish this Activity — we call
+        // finishCompliance() directly below so the release is synchronous and
+        // deterministic (the previous implementation could get stuck pinned if
+        // the broadcast was lost, and disarming before stopLockTask() could
+        // leave the pin in an inconsistent state).
+        LocationComplianceCoordinator.onLocationEnabled()
+        // Synchronously finish + release the pin. finishCompliance() removes
+        // the pollers and calls finish(); onDestroy() then calls
+        // stopLockTaskMode() which calls stopLockTask() THEN disarm().
+        finishCompliance()
+        return true
     }
 
     /**

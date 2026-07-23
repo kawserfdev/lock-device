@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import com.example.app_lock.admin.LocationEnforcementController
+import com.example.app_lock.util.Constants
 
 /**
  * Process-global orchestrator of the Location Compliance Enforcement System.
@@ -13,7 +14,11 @@ object LocationComplianceCoordinator {
 
     private const val TAG = "LocComplianceCoord"
 
-    const val GRACE_PERIOD_MS = 2 * 60 * 1000L
+    // The pre-compliance-screen grace delay is centralized in
+    // Constants.LOCATION_OFF_GRACE_PERIOD_MS (single source of truth). Change
+    // that one value to adjust the delay everywhere in the project.
+    // COMPLIANCE_LOCK_COUNTDOWN_MS is the countdown shown INSIDE the
+    // compliance screen and is intentionally kept local (separate concern).
     const val COMPLIANCE_LOCK_COUNTDOWN_MS = 2 * 60 * 1000L
     const val ACTION_DISMISS_COMPLIANCE = "com.example.app_lock.action.DISMISS_COMPLIANCE"
     const val EXTRA_LOCK_DEADLINE_MS = "lock_deadline_ms"
@@ -94,8 +99,15 @@ object LocationComplianceCoordinator {
         Log.i(TAG, "onLocationEnabled() — location restored; cleaning up from state=$state")
         timerManager.cancelAll()
         LocationComplianceUnlockReceiver.unregister(appContext)
+        // Broadcast DISMISS so any live compliance Activity finishes itself.
+        // The Activity's onDestroy() then owns the FULL Lock Task release
+        // sequence in the correct order: stopLockTask() THEN disarm().
+        // We deliberately do NOT call uiManager.releaseLockTask() (disarm)
+        // here anymore — disarming before stopLockTask() (which runs in the
+        // Activity's onDestroy) clears the allowlist while still pinned,
+        // which can leave the pin in an inconsistent state. The Activity is
+        // the single owner of the stopLockTask()+disarm() sequence.
         uiManager.dismissComplianceScreen()
-        uiManager.releaseLockTask()
         store.resetLockIteration()
         transitionTo(ComplianceEvent.LOCATION_RESTORED_TRANSIENT, "location-enabled")
         transitionTo(ComplianceEvent.RESET_TO_NORMAL, "location-enabled")
@@ -168,8 +180,16 @@ object LocationComplianceCoordinator {
             if (state != LocationComplianceState.NORMAL) {
                 timerManager.cancelAll()
                 LocationComplianceUnlockReceiver.unregister(appContext)
+                // Broadcast DISMISS so any live compliance Activity finishes and
+                // its onDestroy() owns the FULL release: stopLockTask() THEN
+                // disarm(). We do NOT call releaseLockTask() (disarm) here:
+                // disarming while an Activity is still pinned (before its
+                // stopLockTask() runs) clears the allowlist mid-pin and can
+                // leave Lock Task Mode inconsistent. If no Activity is live
+                // (e.g. restore() after process death), the stale allowlist is
+                // harmless — it only PERMITS Lock Task, it never forces it —
+                // and is reset on the next arm() cycle.
                 uiManager.dismissComplianceScreen()
-                uiManager.releaseLockTask()
                 store.resetLockIteration()
                 transitionTo(ComplianceEvent.LOCATION_RESTORED_TRANSIENT, "$reason-location-on")
                 transitionTo(ComplianceEvent.RESET_TO_NORMAL, "$reason-location-on")
@@ -216,10 +236,10 @@ object LocationComplianceCoordinator {
     @Synchronized
     private fun startGraceCountdown() {
         timerManager.cancelAll()
-        val deadline = System.currentTimeMillis() + GRACE_PERIOD_MS
+        val deadline = System.currentTimeMillis() + Constants.LOCATION_OFF_GRACE_PERIOD_MS
         store.setCountdownDeadline(deadline)
         transitionTo(ComplianceEvent.START_GRACE_COUNTDOWN, "start-grace")
-        timerManager.startGraceTimer(GRACE_PERIOD_MS)
+        timerManager.startGraceTimer(Constants.LOCATION_OFF_GRACE_PERIOD_MS)
     }
 
     @Synchronized
@@ -229,12 +249,19 @@ object LocationComplianceCoordinator {
         val locked = controller?.lockNow() == true
         val iteration = store.incrementLockIteration()
         Log.w(TAG, "escalateToLocked($reason) — lockNow=$locked, iteration=$iteration")
+        // Broadcast DISMISS so the live compliance Activity finishes and its
+        // onDestroy() owns the FULL release: stopLockTask() THEN disarm().
+        // We do NOT call releaseLockTask() (disarm) here — disarming before the
+        // Activity's stopLockTask() clears the allowlist while still pinned.
         uiManager.dismissComplianceScreen()
-        uiManager.releaseLockTask()
         if (locked) {
             LocationComplianceUnlockReceiver.register(appContext)
             transitionTo(ComplianceEvent.LOCK_TIMEOUT, reason)
         } else {
+            // lockNow() failed: re-launch the compliance Activity. The new
+            // Activity's onCreate() -> startLockTaskMode() re-arms (allowlist +
+            // features) and re-pins. The old Activity's onDestroy() release is
+            // idempotent (lockTaskReleased flag + disarm no-op if already cleared).
             val lockDeadline = System.currentTimeMillis() + COMPLIANCE_LOCK_COUNTDOWN_MS
             store.setCountdownDeadline(lockDeadline)
             uiManager.launchComplianceActivity(lockDeadline)

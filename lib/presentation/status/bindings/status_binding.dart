@@ -1,8 +1,6 @@
 import 'package:get/get.dart';
 
 import '../../../domain/usecases/check_permission_usecase.dart';
-import '../../../domain/usecases/disable_kiosk_mode_usecase.dart';
-import '../../../domain/usecases/enable_kiosk_mode_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/lock_for_duration_usecase.dart';
@@ -50,12 +48,6 @@ class StatusBinding extends Bindings {
     Get.lazyPut<IsUninstallBlockSupportedUseCase>(
       () => IsUninstallBlockSupportedUseCase(Get.find()),
     );
-    Get.lazyPut<EnableKioskModeUseCase>(
-      () => EnableKioskModeUseCase(Get.find()),
-    );
-    Get.lazyPut<DisableKioskModeUseCase>(
-      () => DisableKioskModeUseCase(Get.find()),
-    );
     Get.lazyPut<WatchServiceStateUseCase>(
       () => WatchServiceStateUseCase(Get.find()),
     );
@@ -82,8 +74,6 @@ class StatusBinding extends Bindings {
         isUninstallBlockedUseCase: Get.find(),
         isUninstallBlockSupportedUseCase: Get.find(),
         watchUninstallBlockUseCase: Get.find(),
-        enableKioskModeUseCase: Get.find(),
-        disableKioskModeUseCase: Get.find(),
       ),
     );
   }

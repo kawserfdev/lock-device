@@ -51,13 +51,25 @@
              - showWhenLocked/turnScreenOn: visible over the lock screen so the
                countdown is always shown.
              - excludeFromRecents: the compliance screen is not a user task.
-             - noHistory: the system will not retain it in the back stack after
-               it finishes (defence-in-depth alongside the back-press callback). -->
+             - lockTaskMode="if_whitelisted": when the app is the Device Owner
+               and allowlisted, the system enters true Lock Task Mode
+               (LOCK_TASK_MODE_LOCKED) for this Activity — Home / Recents are
+               fully blocked. When NOT allowlisted it falls back to screen
+               pinning (LOCK_TASK_MODE_PINNED). This attribute is the modern
+               (API 29+) declarative equivalent of calling startLockTask() in
+               onCreate, and is the most reliable way to guarantee the strong
+               mode.
+             - NOTE: noHistory is intentionally NOT set. noHistory="true"
+               causes the system to finish() the Activity the moment the user
+               navigates away (e.g. presses Home on a non-allowlisted device),
+               which destroys the pinned Activity and breaks the "stays
+               trapped" requirement. The back-press callback + Lock Task Mode
+               already prevent dismissal; noHistory is redundant and harmful. -->
         <activity
             android:name=".compliance.LocationComplianceActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:noHistory="true"
+            android:lockTaskMode="if_whitelisted"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/ComplianceTheme" />

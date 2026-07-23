@@ -15,82 +15,34 @@ class StatusView extends GetView<StatusController> {
 
   @override
   Widget build(BuildContext context) {
-    // Lock the Back button while kiosk (Lock Task Mode) is active. The Home /
-    // Recents buttons are disabled natively by the kiosk mode. A "Release &
-    // Exit" affordance in the AppBar lets the user leave on demand.
-    return Obx(() {
-      final bool kioskActive = controller.isKioskActive.value;
-      return PopScope(
-        canPop: !kioskActive,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Demo Status'),
-            actions: <Widget>[
-              if (kioskActive)
-                IconButton(
-                  icon: const Icon(Icons.lock_open),
-                  tooltip: 'Release & Exit',
-                  onPressed: () async {
-                    await controller.exitKiosk();
-                    if (Get.context != null && Get.context!.mounted) {
-                      Get.back<void>();
-                    }
-                  },
-                ),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Demo Status')),
+      body: const SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PermissionTile(),
+              SizedBox(height: 8),
+              _ServiceTile(),
+              SizedBox(height: 8),
+              _LockTile(),
+              SizedBox(height: 8),
+              _LockoutTile(),
+              SizedBox(height: 8),
+              _TimedLockTile(),
+              SizedBox(height: 8),
+              _DemoTile(),
+              SizedBox(height: 8),
+              _UninstallBlockTile(),
+              SizedBox(height: 24),
+              _ActionButtons(),
             ],
           ),
-          body: const SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _KioskTile(),
-                  SizedBox(height: 8),
-                  _PermissionTile(),
-                  SizedBox(height: 8),
-                  _ServiceTile(),
-                  SizedBox(height: 8),
-                  _LockTile(),
-                  SizedBox(height: 8),
-                  _LockoutTile(),
-                  SizedBox(height: 8),
-                  _TimedLockTile(),
-                  SizedBox(height: 8),
-                  _DemoTile(),
-                  SizedBox(height: 8),
-                  _UninstallBlockTile(),
-                  SizedBox(height: 24),
-                  _ActionButtons(),
-                ],
-              ),
-            ),
-          ),
         ),
-      );
-    });
-  }
-}
-
-/// Tile showing whether kiosk (Lock Task Mode) is active.
-///
-/// When active, the Back / Home / Recents buttons are disabled and the user
-/// must use the AppBar "Release & Exit" affordance to leave the screen.
-class _KioskTile extends StatelessWidget {
-  const _KioskTile();
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final StatusController controller = Get.find();
-    return Obx(() => _StatusCard(
-          theme: theme,
-          icon: Icons.pin,
-          title: 'Kiosk Mode',
-          value: controller.isKioskActive.value
-              ? 'Active — Back / Home / Recents disabled'
-              : 'Inactive — navigation enabled',
-        ));
+      ),
+    );
   }
 }
 

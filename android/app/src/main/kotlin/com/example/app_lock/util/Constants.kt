@@ -154,6 +154,27 @@ object Constants {
      */
     const val LOCKOUT_DURATION_MS = 60_000L
 
+    // ── Location Compliance ───────────────────────────────────────────────────
+
+    /**
+     * Grace period (in milliseconds) the app waits after the user turns OFF
+     * Device Location (GPS) before launching the native
+     * [com.example.app_lock.compliance.LocationComplianceActivity].
+     *
+     * Flow:
+     *   GPS OFF  →  start grace timer  →  wait LOCATION_OFF_GRACE_PERIOD_MS
+     *            →  if GPS turns ON before timeout → cancel timer (no screen)
+     *            →  else → launch LocationComplianceActivity
+     *
+     * This is the SINGLE source of truth for the pre-compliance-screen delay.
+     * Change this value to adjust the grace period everywhere in the project.
+     * It does NOT affect the countdown timer shown INSIDE the compliance
+     * screen (that is [com.example.app_lock.compliance.LocationComplianceCoordinator.COMPLIANCE_LOCK_COUNTDOWN_MS]).
+     *
+     * Default: 2 minutes (120_000 ms).
+     */
+    const val LOCATION_OFF_GRACE_PERIOD_MS = 2 * 60 * 1000L
+
     // ── Foreground service ───────────────────────────────────────────────────
 
     /** Notification channel id for the foreground service notification. */
