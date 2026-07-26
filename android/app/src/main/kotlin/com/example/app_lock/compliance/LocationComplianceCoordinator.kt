@@ -15,11 +15,11 @@ object LocationComplianceCoordinator {
     private const val TAG = "LocComplianceCoord"
 
     // The pre-compliance-screen grace delay is centralized in
-    // Constants.LOCATION_OFF_GRACE_PERIOD_MS (single source of truth). Change
+    // ComplianceConfig.LOCATION_OFF_GRACE_PERIOD_MS (single source of truth). Change
     // that one value to adjust the delay everywhere in the project.
     // COMPLIANCE_LOCK_COUNTDOWN_MS is the countdown shown INSIDE the
     // compliance screen and is intentionally kept local (separate concern).
-    const val COMPLIANCE_LOCK_COUNTDOWN_MS = 2 * 60 * 1000L
+    const val COMPLIANCE_LOCK_COUNTDOWN_MS = 1 * 60 * 1000L
     const val ACTION_DISMISS_COMPLIANCE = "com.example.app_lock.action.DISMISS_COMPLIANCE"
     const val EXTRA_LOCK_DEADLINE_MS = "lock_deadline_ms"
 
@@ -236,10 +236,10 @@ object LocationComplianceCoordinator {
     @Synchronized
     private fun startGraceCountdown() {
         timerManager.cancelAll()
-        val deadline = System.currentTimeMillis() + Constants.LOCATION_OFF_GRACE_PERIOD_MS
+        val deadline = System.currentTimeMillis() + ComplianceConfig.LOCATION_OFF_GRACE_PERIOD_MS
         store.setCountdownDeadline(deadline)
         transitionTo(ComplianceEvent.START_GRACE_COUNTDOWN, "start-grace")
-        timerManager.startGraceTimer(Constants.LOCATION_OFF_GRACE_PERIOD_MS)
+        timerManager.startGraceTimer(ComplianceConfig.LOCATION_OFF_GRACE_PERIOD_MS)
     }
 
     @Synchronized
