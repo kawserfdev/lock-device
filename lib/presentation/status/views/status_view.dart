@@ -23,6 +23,8 @@ class StatusView extends GetView<StatusController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _UserLockStatusCard(),
+              SizedBox(height: 12),
               _PermissionTile(),
               SizedBox(height: 8),
               _ServiceTile(),
@@ -39,6 +41,7 @@ class StatusView extends GetView<StatusController> {
               SizedBox(height: 24),
               _ActionButtons(),
             ],
+
           ),
         ),
       ),
@@ -378,3 +381,125 @@ class _ActionButtons extends StatelessWidget {
         ));
   }
 }
+
+class _UserLockStatusCard extends StatelessWidget {
+  const _UserLockStatusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final StatusController controller = Get.find();
+
+    return Obx(() {
+      final user = controller.state.value.userModel;
+      final lockStatus = user.lockStatus;
+
+      return Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.person_pin, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'ইউজার লক স্টেটাস মডিউল (${user.name})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              // 1. Lock Active for GPS Deactive
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: Icon(
+                  Icons.location_off,
+                  color: lockStatus.isGpsDeactiveLockActive
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.outline,
+                ),
+                title: const Text(
+                  'লক একটিভ ফর জিপিএস ডিএক্টিভ',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'জিপিএস বন্ধ করা হলে ডিভাইস স্বয়ংক্রিয়ভাবে লক হবে',
+                ),
+                value: lockStatus.isGpsDeactiveLockActive,
+                onChanged: controller.isBusy.value
+                    ? null
+                    : (bool val) => controller.toggleGpsDeactiveLock(val),
+              ),
+              const SizedBox(height: 8),
+              // 2. Lock Active for Lock Time
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: Icon(
+                  Icons.access_time_filled,
+                  color: lockStatus.isLockTimeActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline,
+                ),
+                title: const Text(
+                  'লক একটিভ ফর লক টাইম',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text('নির্ধারিত সময়: ${lockStatus.lockTime}'),
+                value: lockStatus.isLockTimeActive,
+                onChanged: controller.isBusy.value
+                    ? null
+                    : (bool val) => controller.toggleLockTimeActive(val),
+              ),
+              if (lockStatus.isLockTimeActive) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickLockTime(
+                      context,
+                      controller,
+                      lockStatus.lockTime,
+                    ),
+                    icon: const Icon(Icons.edit_calendar),
+                    label: Text('লক টাইম পরিবর্তন (${lockStatus.lockTime})'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _pickLockTime(
+    BuildContext context,
+    StatusController controller,
+    String currentLockTime,
+  ) async {
+    final parts = currentLockTime.split(':');
+    final initialHour = parts.length == 2 ? int.tryParse(parts[0]) ?? 22 : 22;
+    final initialMinute = parts.length == 2 ? int.tryParse(parts[1]) ?? 0 : 0;
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: initialHour, minute: initialMinute),
+    );
+
+    if (picked != null) {
+      final String formattedHour = picked.hour.toString().padLeft(2, '0');
+      final String formattedMinute = picked.minute.toString().padLeft(2, '0');
+      final String timeString = '$formattedHour:$formattedMinute';
+      await controller.updateLockTime(timeString);
+    }
+  }
+}
+

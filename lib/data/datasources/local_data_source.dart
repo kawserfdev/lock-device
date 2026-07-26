@@ -53,9 +53,19 @@ class LocalDataSource {
   Future<void> setDemoRunning(bool value) =>
       _storage.write(StorageKeys.isDemoRunning, value);
 
+  // ── User Model & Lock Status ──────────────────────────────────────────────
+
+  /// Retrieves the saved user model string or null.
+  String? get userModelJson => _storage.read<String>(StorageKeys.userModel);
+
+  /// Persists the serialized user model string.
+  Future<void> setUserModelJson(String jsonStr) =>
+      _storage.write(StorageKeys.userModel, jsonStr);
+
   /// Clears all persisted values (used on reset).
   Future<void> clearAll() async {
     await _storage.erase();
     AppLogger.info('Local storage cleared');
   }
 }
+

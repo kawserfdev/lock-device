@@ -17,4 +17,8 @@ class StorageKeys {
 
   /// Whether the demo is currently running.
   static const String isDemoRunning = 'is_demo_running';
+
+  /// Serialized user model JSON string.
+  static const String userModel = 'user_model';
 }
+

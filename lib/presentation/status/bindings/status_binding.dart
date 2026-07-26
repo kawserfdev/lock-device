@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 import '../../../domain/usecases/check_permission_usecase.dart';
+import '../../../domain/usecases/get_user_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/lock_for_duration_usecase.dart';
@@ -8,6 +9,7 @@ import '../../../domain/usecases/lock_now_usecase.dart';
 import '../../../domain/usecases/set_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/start_service_usecase.dart';
 import '../../../domain/usecases/stop_service_usecase.dart';
+import '../../../domain/usecases/update_user_lock_status_usecase.dart';
 import '../../../domain/usecases/watch_lock_result_usecase.dart';
 import '../../../domain/usecases/watch_lockout_state_usecase.dart';
 import '../../../domain/usecases/watch_service_state_usecase.dart';
@@ -16,14 +18,17 @@ import '../controllers/status_controller.dart';
 
 /// GetX binding for the Status screen.
 ///
-/// Wires the Status controller with its eleven use-case dependencies: the
-/// action use cases (check permission, start/stop service, lock now, set /
-/// check uninstall-block) and the watch use cases (service-state, lock-result,
-/// lockout-state, and uninstall-block streams) that feed the push-based state
-/// synchronisation path.
+/// Wires the Status controller with its use-case dependencies including user
+/// and lock status settings management.
 class StatusBinding extends Bindings {
   @override
   void dependencies() {
+    Get.lazyPut<GetUserUseCase>(
+      () => GetUserUseCase(Get.find()),
+    );
+    Get.lazyPut<UpdateUserLockStatusUseCase>(
+      () => UpdateUserLockStatusUseCase(Get.find()),
+    );
     Get.lazyPut<CheckPermissionUseCase>(
       () => CheckPermissionUseCase(Get.find()),
     );
@@ -62,6 +67,8 @@ class StatusBinding extends Bindings {
     );
     Get.lazyPut<StatusController>(
       () => StatusController(
+        getUserUseCase: Get.find(),
+        updateUserLockStatusUseCase: Get.find(),
         checkPermissionUseCase: Get.find(),
         startServiceUseCase: Get.find(),
         stopServiceUseCase: Get.find(),
@@ -78,3 +85,4 @@ class StatusBinding extends Bindings {
     );
   }
 }
+

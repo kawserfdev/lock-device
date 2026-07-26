@@ -1,10 +1,12 @@
 import 'lock_result.dart';
 import 'permission_status.dart';
 import 'service_status.dart';
+import 'user_model.dart';
 
 export 'lock_result.dart';
 export 'permission_status.dart';
 export 'service_status.dart';
+export 'user_model.dart';
 
 /// Aggregate snapshot of the demo's runtime state.
 ///
@@ -22,6 +24,7 @@ class AppState {
     this.lastLockTime,
     this.isUninstallBlocked = false,
     this.isUninstallBlockSupported = false,
+    this.userModel = UserModel.defaultUser,
   });
 
   /// Current device-admin permission status.
@@ -58,6 +61,9 @@ class AppState {
   /// ISO timestamp of the last successful lock, if any.
   final String? lastLockTime;
 
+  /// Current user model with lock status configuration.
+  final UserModel userModel;
+
   /// Returns a copy with the provided fields replaced.
   AppState copyWith({
     PermissionStatus? permissionStatus,
@@ -68,6 +74,7 @@ class AppState {
     bool? isUninstallBlocked,
     bool? isUninstallBlockSupported,
     String? lastLockTime,
+    UserModel? userModel,
   }) {
     return AppState(
       permissionStatus: permissionStatus ?? this.permissionStatus,
@@ -79,6 +86,8 @@ class AppState {
       isUninstallBlockSupported:
           isUninstallBlockSupported ?? this.isUninstallBlockSupported,
       lastLockTime: lastLockTime ?? this.lastLockTime,
+      userModel: userModel ?? this.userModel,
     );
   }
 }
+

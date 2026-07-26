@@ -12,12 +12,14 @@ import '../data/repositories/location_repository_impl.dart';
 import '../data/repositories/lock_repository_impl.dart';
 import '../data/repositories/permission_repository_impl.dart';
 import '../data/repositories/uninstall_repository_impl.dart';
+import '../data/repositories/user_repository_impl.dart';
 import '../domain/repositories/background_service_repository.dart';
 import '../domain/repositories/kiosk_repository.dart';
 import '../domain/repositories/location_repository.dart';
 import '../domain/repositories/lock_repository.dart';
 import '../domain/repositories/permission_repository.dart';
 import '../domain/repositories/uninstall_repository.dart';
+import '../domain/repositories/user_repository.dart';
 
 /// Centralised dependency-injection wiring.
 ///
@@ -54,6 +56,10 @@ class DependencyInjection {
     );
 
     // ── Repositories (bind abstractions to implementations) ──────────────────
+    Get.put<UserRepository>(
+      UserRepositoryImpl(Get.find<LocalDataSource>()),
+      permanent: true,
+    );
     Get.put<PermissionRepository>(
       PermissionRepositoryImpl(
         nativeDataSource: Get.find<NativeDataSource>(),
@@ -61,6 +67,7 @@ class DependencyInjection {
       ),
       permanent: true,
     );
+
     Get.put<LockRepository>(
       LockRepositoryImpl(
         nativeDataSource: Get.find<NativeDataSource>(),

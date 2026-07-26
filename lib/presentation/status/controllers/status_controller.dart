@@ -6,6 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../domain/entities/app_state.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
+import '../../../domain/usecases/get_user_usecase.dart';
 import '../../../domain/usecases/is_uninstall_block_supported_usecase.dart';
 import '../../../domain/usecases/is_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/lock_for_duration_usecase.dart';
@@ -13,6 +14,7 @@ import '../../../domain/usecases/lock_now_usecase.dart';
 import '../../../domain/usecases/set_uninstall_blocked_usecase.dart';
 import '../../../domain/usecases/start_service_usecase.dart';
 import '../../../domain/usecases/stop_service_usecase.dart';
+import '../../../domain/usecases/update_user_lock_status_usecase.dart';
 import '../../../domain/usecases/watch_lock_result_usecase.dart';
 import '../../../domain/usecases/watch_lockout_state_usecase.dart';
 import '../../../domain/usecases/watch_service_state_usecase.dart';
@@ -21,21 +23,12 @@ import '../../../domain/usecases/watch_uninstall_block_usecase.dart';
 /// ViewModel for the Status screen.
 ///
 /// Aggregates the demo's runtime state into a single reactive [AppState]
-/// snapshot and exposes the four Status-screen actions: start demo, stop
-/// demo, lock now, and check permission. The static `OVERDUE` flag that
-/// drives the lock decision lives here as a demo constant.
-///
-/// State synchronisation (architecture review §16.3 — dual-path):
-/// - **Pull path**: [startDemo] / [stopDemo] / [lockNow] invoke use cases and
-///   update state from the returned result.
-/// - **Push path**: subscriptions to [WatchServiceStateUseCase] and
-///   [WatchLockResultUseCase] update state the moment the native foreground
-///   service emits an event. This is what lets the UI reflect a *background*
-///   lock (triggered by the countdown timer) even though no Flutter method
-///   call initiated it.
+/// snapshot and exposes Status-screen actions and User Lock Status settings.
 class StatusController extends GetxController {
   /// Constructs the controller with its use-case dependencies.
   StatusController({
+    required GetUserUseCase getUserUseCase,
+    required UpdateUserLockStatusUseCase updateUserLockStatusUseCase,
     required CheckPermissionUseCase checkPermissionUseCase,
     required StartServiceUseCase startServiceUseCase,
     required StopServiceUseCase stopServiceUseCase,
@@ -48,7 +41,9 @@ class StatusController extends GetxController {
     required IsUninstallBlockedUseCase isUninstallBlockedUseCase,
     required IsUninstallBlockSupportedUseCase isUninstallBlockSupportedUseCase,
     required WatchUninstallBlockUseCase watchUninstallBlockUseCase,
-  }) : _checkPermissionUseCase = checkPermissionUseCase,
+  }) : _getUserUseCase = getUserUseCase,
+       _updateUserLockStatusUseCase = updateUserLockStatusUseCase,
+       _checkPermissionUseCase = checkPermissionUseCase,
        _startServiceUseCase = startServiceUseCase,
        _stopServiceUseCase = stopServiceUseCase,
        _lockNowUseCase = lockNowUseCase,
@@ -61,6 +56,8 @@ class StatusController extends GetxController {
        _isUninstallBlockSupportedUseCase = isUninstallBlockSupportedUseCase,
        _watchUninstallBlockUseCase = watchUninstallBlockUseCase;
 
+  final GetUserUseCase _getUserUseCase;
+  final UpdateUserLockStatusUseCase _updateUserLockStatusUseCase;
   final CheckPermissionUseCase _checkPermissionUseCase;
   final StartServiceUseCase _startServiceUseCase;
   final StopServiceUseCase _stopServiceUseCase;
@@ -89,7 +86,8 @@ class StatusController extends GetxController {
   final RxInt selectedLockMinutes = 5.obs;
 
   /// Preset durations (in minutes) offered in the duration picker.
-  List<int> get lockDurationPresets => const <int>[1, 2, 3, 4, 5, 10, 15, 30, 60];
+  List<int> get lockDurationPresets =>
+      const <int>[1, 2, 3, 4, 5, 10, 15, 30, 60];
 
   /// Static demo flag — in a real app this would come from a backend.
   /// For the demo it is always `true`, meaning the device is "overdue"
@@ -104,6 +102,7 @@ class StatusController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    loadUser();
     refreshPermission();
     refreshUninstallBlock();
     _subscribeServiceState();
@@ -111,6 +110,40 @@ class StatusController extends GetxController {
     _subscribeLockoutState();
     _subscribeUninstallBlock();
   }
+
+  /// Loads the persisted user profile and lock status settings.
+  Future<void> loadUser() async {
+    final UserModel user = await _getUserUseCase.call();
+    _update(userModel: user);
+  }
+
+  /// Toggles whether lock is active when GPS is deactivated.
+  Future<void> toggleGpsDeactiveLock(bool value) async {
+    final UserModel updatedUser = await _updateUserLockStatusUseCase.call(
+      isGpsDeactiveLockActive: value,
+    );
+    _update(userModel: updatedUser);
+    AppLogger.info('Lock Active For GPS Deactive updated to $value');
+  }
+
+  /// Toggles whether lock is active for scheduled lock time.
+  Future<void> toggleLockTimeActive(bool value) async {
+    final UserModel updatedUser = await _updateUserLockStatusUseCase.call(
+      isLockTimeActive: value,
+    );
+    _update(userModel: updatedUser);
+    AppLogger.info('Lock Active For Lock Time updated to $value');
+  }
+
+  /// Updates the scheduled lock time (e.g., "22:00").
+  Future<void> updateLockTime(String time) async {
+    final UserModel updatedUser = await _updateUserLockStatusUseCase.call(
+      lockTime: time,
+    );
+    _update(userModel: updatedUser);
+    AppLogger.info('Lock time updated to $time');
+  }
+
 
   /// Subscribes to native service-state changes (push path).
   ///
@@ -308,6 +341,7 @@ class StatusController extends GetxController {
     bool? isUninstallBlocked,
     bool? isUninstallBlockSupported,
     String? lastLockTime,
+    UserModel? userModel,
   }) {
     state.value = state.value.copyWith(
       permissionStatus: permissionStatus,
@@ -318,13 +352,16 @@ class StatusController extends GetxController {
       isUninstallBlocked: isUninstallBlocked,
       isUninstallBlockSupported: isUninstallBlockSupported,
       lastLockTime: lastLockTime,
+      userModel: userModel,
     );
+
     AppLogger.debug('Status state isDemoRunning: ${state.value.isDemoRunning}');
     AppLogger.debug(
       'Status state isLockoutActive: ${state.value.isLockoutActive}',
     );
     AppLogger.debug(
-      'Status state isUninstallBlockSupported: ${state.value.isUninstallBlockSupported}',
+      'Status state isUninstallBlockSupported: '
+      '${state.value.isUninstallBlockSupported}',
     );
     AppLogger.debug(
       'Status state isUninstallBlocked: ${state.value.isUninstallBlocked}',
