@@ -79,8 +79,7 @@ class LockTaskController(context: Context) {
          *   screen (the coordinator handles locking itself via `lockNow()`).
          */
         private val COMPLIANCE_FEATURES =
-            DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
-                DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+            DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
 
         /**
          * Lock Task feature flags applied while the Status ("App Lock Time
@@ -117,7 +116,16 @@ class LockTaskController(context: Context) {
          * [COMPLIANCE_FEATURES] keeps [DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO]
          * (the status bar) visible.
          */
-        private const val SETTINGS_PACKAGE = "com.android.settings"
+        /**
+         * OEM Settings packages allowlisted alongside this app for the
+         * compliance screen so the "Enable Location" button can open Location
+         * Settings while the device is pinned in Lock Task Mode.
+         */
+        private val SETTINGS_PACKAGES = arrayOf(
+            "com.android.settings",
+            "com.google.android.settings",
+            "com.miui.securitycenter"
+        )
     }
 
     private val appContext = context.applicationContext
@@ -193,7 +201,7 @@ class LockTaskController(context: Context) {
             // compliance feature set — the kiosk (Status screen) feature set
             // is applied separately and does not need Settings.
             val allowlisted = if (features == COMPLIANCE_FEATURES) {
-                arrayOf(appContext.packageName, SETTINGS_PACKAGE)
+                arrayOf(appContext.packageName) + SETTINGS_PACKAGES
             } else {
                 arrayOf(appContext.packageName)
             }

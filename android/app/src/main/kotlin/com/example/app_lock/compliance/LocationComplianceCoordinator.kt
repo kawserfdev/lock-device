@@ -120,6 +120,8 @@ object LocationComplianceCoordinator {
         transitionTo(ComplianceEvent.GRACE_TIMEOUT, "grace-elapsed")
         val lockDeadline = System.currentTimeMillis() + COMPLIANCE_LOCK_COUNTDOWN_MS
         store.setCountdownDeadline(lockDeadline)
+        // Arm Lock Task Mode BEFORE launching the activity so the allowlist is ready immediately.
+        lockTaskController.arm()
         uiManager.launchComplianceActivity(lockDeadline)
         timerManager.startLockTimer(COMPLIANCE_LOCK_COUNTDOWN_MS)
     }
@@ -222,6 +224,8 @@ object LocationComplianceCoordinator {
                 } else {
                     val lockDeadline = if (deadline > 0) deadline else System.currentTimeMillis() + COMPLIANCE_LOCK_COUNTDOWN_MS
                     store.setCountdownDeadline(lockDeadline)
+                    // Arm Lock Task Mode BEFORE launching the activity so the allowlist is ready immediately.
+                    lockTaskController.arm()
                     uiManager.launchComplianceActivity(lockDeadline)
                     val delay = (lockDeadline - System.currentTimeMillis()).coerceAtLeast(0L)
                     timerManager.startLockTimer(delay)

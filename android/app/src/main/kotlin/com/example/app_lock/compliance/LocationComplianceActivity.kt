@@ -221,25 +221,29 @@ class LocationComplianceActivity : ComponentActivity() {
     private fun startLockTaskMode() {
         val controller = LocationComplianceCoordinator.lockTaskController
         val supported = controller.isSupported()
+        
+        // Arm as a fallback/safety measure (in case it wasn't armed before).
         val armed = controller.arm()
-        val allowlisted = controller.isAllowlisted()
+        
         Log.i(
             TAG,
-            "startLockTaskMode — supported=$supported, armed=$armed, allowlisted=$allowlisted",
+            "startLockTaskMode — supported=$supported, armed=$armed",
         )
-        if (!armed || !allowlisted) {
-            Log.w(TAG, "startLockTaskMode — allowlist not set; skipping pin (non-DO or arm failed)")
+        if (!supported) {
+            Log.w(TAG, "startLockTaskMode — Lock Task not supported (not Device Owner or admin inactive)")
             return
         }
+        
         runCatching {
             startLockTask()
-            Log.i(TAG, "startLockTaskMode — startLockTask() called")
+            Log.i(TAG, "startLockTaskMode — startLockTask() called successfully")
         }.onFailure { Log.e(TAG, "startLockTaskMode — startLockTask failed", it) }
+        
         // Log the actual mode we ended up in. This is the key diagnostic: if
         // it says "PINNED" instead of "LOCKED", Home/Recents are NOT blocked.
         mainHandler.postDelayed({
             Log.i(TAG, "startLockTaskMode — actual state: ${controller.getLockTaskModeStateName()}")
-        }, 300)
+        }, 500)
     }
 
     /**
