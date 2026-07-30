@@ -51,6 +51,8 @@ class WelcomeBinding extends Bindings {
         checkLocationEnabledUseCase: Get.find(),
         watchLocationStatusUseCase: Get.find(),
         openLocationSettingsUseCase: Get.find(),
+        enableKioskModeUseCase: Get.find(),
+        disableKioskModeUseCase: Get.find(),
       ),
     );
   }

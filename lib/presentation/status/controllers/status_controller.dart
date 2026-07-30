@@ -113,6 +113,15 @@ class StatusController extends GetxController {
   StreamSubscription<LockResult>? _lockResultSub;
   StreamSubscription<bool>? _lockoutStateSub;
   StreamSubscription<bool>? _uninstallBlockSub;
+  // final RxBool isLocationEnabled = false.obs;
+  // Future<void> _refreshLocationEnabled() async {
+  //   isLocationEnabled.value = await _checkLocationEnabledUseCase.call();
+  // }
+
+  // void checkLocation(){
+
+
+  // }
 
   @override
   void onInit() {

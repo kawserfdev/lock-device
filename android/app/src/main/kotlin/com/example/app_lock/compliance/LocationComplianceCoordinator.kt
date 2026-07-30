@@ -13,8 +13,8 @@ object LocationComplianceCoordinator {
 
     private const val TAG = "LocComplianceCoord"
 
-    const val GRACE_PERIOD_MS = 2 * 60 * 1000L
-    const val COMPLIANCE_LOCK_COUNTDOWN_MS = 2 * 60 * 1000L
+    const val GRACE_PERIOD_MS = 1 * 60 * 1000L
+    const val COMPLIANCE_LOCK_COUNTDOWN_MS = 1 * 60 * 1000L
     const val ACTION_DISMISS_COMPLIANCE = "com.example.app_lock.action.DISMISS_COMPLIANCE"
     const val EXTRA_LOCK_DEADLINE_MS = "lock_deadline_ms"
 

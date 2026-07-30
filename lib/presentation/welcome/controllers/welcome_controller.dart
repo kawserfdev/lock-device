@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:app_lock/domain/usecases/disable_kiosk_mode_usecase.dart';
+import 'package:app_lock/domain/usecases/enable_kiosk_mode_usecase.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
@@ -58,13 +60,17 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
     required CheckLocationEnabledUseCase checkLocationEnabledUseCase,
     required WatchLocationStatusUseCase watchLocationStatusUseCase,
     required OpenLocationSettingsUseCase openLocationSettingsUseCase,
+    required DisableKioskModeUseCase disableKioskModeUseCase,
+    required EnableKioskModeUseCase enableKioskModeUseCase,
   })  : _checkPermissionUseCase = checkPermissionUseCase,
         _requestPermissionUseCase = requestPermissionUseCase,
         _watchPermissionUseCase = watchPermissionUseCase,
         _checkProvisioningAllowedUseCase = checkProvisioningAllowedUseCase,
         _checkLocationEnabledUseCase = checkLocationEnabledUseCase,
         _watchLocationStatusUseCase = watchLocationStatusUseCase,
-        _openLocationSettingsUseCase = openLocationSettingsUseCase;
+        _openLocationSettingsUseCase = openLocationSettingsUseCase,
+        _enableKioskModeUseCase = enableKioskModeUseCase,
+        _disableKioskModeUseCase = disableKioskModeUseCase;
 
   final CheckPermissionUseCase _checkPermissionUseCase;
   final RequestPermissionUseCase _requestPermissionUseCase;
@@ -73,6 +79,9 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   final CheckLocationEnabledUseCase _checkLocationEnabledUseCase;
   final WatchLocationStatusUseCase _watchLocationStatusUseCase;
   final OpenLocationSettingsUseCase _openLocationSettingsUseCase;
+    final EnableKioskModeUseCase _enableKioskModeUseCase;
+  final DisableKioskModeUseCase _disableKioskModeUseCase;
+
 
   /// Reactive permission status displayed on the Welcome screen.
   final Rx<PermissionStatus> permissionStatus =
@@ -97,6 +106,39 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
 
   StreamSubscription<PermissionStatus>? _permissionSub;
   StreamSubscription<bool>? _locationStatusSub;
+  Timer? _locationCheckTimer;
+
+  final RxBool isKioskActive = false.obs;
+
+    Future<void> enableKiosk() async {
+    try {
+      final bool ok = await _enableKioskModeUseCase.call();
+      isKioskActive.value = ok;
+      if (ok) {
+        AppLogger.debug('Kiosk mode (Lock Task Mode) enabled');
+      } else {
+        AppLogger.warning('Kiosk mode not enabled — device not supported');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to enable kiosk mode', error: e);
+    }
+  }
+
+    Future<void> exitKiosk() async {
+    try {
+      final bool ok = await _disableKioskModeUseCase.call();
+      isKioskActive.value = false;
+      if (ok) {
+        AppLogger.debug('Kiosk mode (Lock Task Mode) disabled');
+      } else {
+        AppLogger.warning('Kiosk mode disable reported not-supported');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to disable kiosk mode', error: e);
+    }
+  }
+
+  
 
   @override
   void onInit() {
@@ -105,6 +147,7 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
     _refreshPermission();
     _refreshProvisioningAllowed();
     _refreshLocationEnabled();
+    _startPeriodicLocationCheck();
     _permissionSub = _watchPermissionUseCase.call().listen(
       (status) {
         AppLogger.debug('Permission stream emitted: $status');
@@ -123,6 +166,13 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
       onError: (Object e) =>
           AppLogger.error('Location status stream error', error: e),
     );
+  }
+
+  /// Starts a periodic timer to check the location status every 30 seconds.
+  void _startPeriodicLocationCheck() {
+    _locationCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _refreshLocationEnabled();
+    });
   }
 
   @override
@@ -200,6 +250,7 @@ class WelcomeController extends GetxController with WidgetsBindingObserver {
   void onClose() {
     _permissionSub?.cancel();
     _locationStatusSub?.cancel();
+    _locationCheckTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppLogger.debug('WelcomeController closed');
     super.onClose();

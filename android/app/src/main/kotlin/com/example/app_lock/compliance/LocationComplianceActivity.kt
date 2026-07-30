@@ -4,18 +4,23 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.addCallback
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.example.app_lock.R
 
 /**
@@ -106,6 +111,9 @@ class LocationComplianceActivity : ComponentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    private var isPinned = false
+    private lateinit var backPressCallback: OnBackPressedCallback
+
     /** Polls location state every [POLL_INTERVAL_MS]; auto-dismisses when ON. */
     private val locationPollRunnable = object : Runnable {
         override fun run() {
@@ -151,14 +159,14 @@ class LocationComplianceActivity : ComponentActivity() {
         bindViews()
         wireButtons()
 
-        // Intercept the back gesture so the screen cannot be dismissed by Back.
-        onBackPressedDispatcher.addCallback(this) {
-            Log.d(TAG, "back pressed — consumed (non-dismissible compliance screen)")
-            // Consume the back press; do nothing.
+        // Initialize back press callback, default to false (disabled).
+        // It will be enabled dynamically when the timer is active.
+        backPressCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                Log.d(TAG, "back pressed — consumed (non-dismissible compliance screen while timer is running)")
+            }
         }
-
-        // Pin via Lock Task Mode so Home / Recents cannot dismiss the screen.
-        startLockTaskMode()
+        onBackPressedDispatcher.addCallback(this, backPressCallback)
     }
 
     private fun bindViews() {
@@ -309,6 +317,52 @@ class LocationComplianceActivity : ComponentActivity() {
             getString(R.string.location_compliance_countdown_expired)
         }
         countdownText.visibility = if (remainingMs > 0L) View.VISIBLE else View.GONE
+
+        if (remainingMs > 0L) {
+            if (!isPinned) {
+                isPinned = true
+                Log.i(TAG, "Timer active — disabling/hiding navigation buttons (Lock Task + Immersive Mode)")
+                startLockTaskMode()
+                hideSystemUI()
+                backPressCallback.isEnabled = true
+            }
+        } else {
+            if (isPinned) {
+                isPinned = false
+                Log.i(TAG, "Timer ended — re-enabling/showing navigation buttons")
+                stopLockTaskMode()
+                showSystemUI()
+                backPressCallback.isEnabled = false
+            }
+        }
+    }
+
+    private fun hideSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.insetsController?.let { controller ->
+                controller.hide(WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+        }
+    }
+
+    private fun showSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            window.insetsController?.show(WindowInsets.Type.navigationBars())
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
     }
 
     /**
