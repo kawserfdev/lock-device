@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../../domain/usecases/check_location_enabled_usecase.dart';
 import '../../../domain/usecases/check_permission_usecase.dart';
 import '../../../domain/usecases/check_provisioning_allowed_usecase.dart';
+import '../../../domain/usecases/disable_kiosk_mode_usecase.dart';
+import '../../../domain/usecases/enable_kiosk_mode_usecase.dart';
 import '../../../domain/usecases/open_location_settings_usecase.dart';
 import '../../../domain/usecases/request_permission_usecase.dart';
 import '../../../domain/usecases/watch_location_status_usecase.dart';
@@ -30,6 +32,12 @@ class WelcomeBinding extends Bindings {
     );
     Get.lazyPut<CheckProvisioningAllowedUseCase>(
       () => CheckProvisioningAllowedUseCase(Get.find()),
+    );
+    Get.lazyPut<EnableKioskModeUseCase>(
+      () => EnableKioskModeUseCase(Get.find()),
+    );
+    Get.lazyPut<DisableKioskModeUseCase>(
+      () => DisableKioskModeUseCase(Get.find()),
     );
     // Location-related use cases — backed by the geolocator plugin via
     // LocationRepository (registered in DependencyInjection).

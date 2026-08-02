@@ -136,7 +136,7 @@ class StatusController extends GetxController {
     // Back / Home / Recents buttons are disabled while the Status screen is
     // visible. Requires the app to be Device Owner; on unsupported devices
     // the call is a no-op and [isKioskActive] stays `false`.
-    enableKiosk();
+   // enableKiosk();
   }
 
   /// Enables Android Lock Task Mode (screen pinning) for the host Activity.
